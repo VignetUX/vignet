@@ -9,6 +9,7 @@
     "@jibe/workshop": "file:.."
   },
   "devDependencies": {
+    "@testing-library/react": "^16",
     "@vitejs/plugin-react": "^4",
     "@vitest/browser": "^3",
     "playwright": "^1",

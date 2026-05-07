@@ -1,15 +1,18 @@
-import { test } from 'vitest'
-import { workshopMount } from '../../src/index.js'
+import { test, expect } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import { Button } from './Button.js'
 
-test('primary', async () => {
-  await workshopMount(<Button label="Click me" variant="primary" />)
+test('primary', () => {
+  render(<Button label="Click me" variant="primary" />)
+  expect(screen.getByRole('button', { name: 'Click me' })).toBeTruthy()
 })
 
-test('danger', async () => {
-  await workshopMount(<Button label="Delete" variant="danger" />)
+test('danger', () => {
+  render(<Button label="Delete" variant="danger" />)
+  expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy()
 })
 
-test('ghost / disabled', async () => {
-  await workshopMount(<Button label="Cancel" variant="ghost" disabled />)
+test('ghost / disabled', () => {
+  render(<Button label="Cancel" variant="ghost" disabled />)
+  expect(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true)
 })
