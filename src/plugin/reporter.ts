@@ -20,10 +20,15 @@ function flattenTasks(tasks: any[]): TestInfo[] {
 
 export class WorkshopReporter implements Reporter {
   readonly clients = new Set<WebSocket>()
+  private _lastCollected: FileInfo[] | null = null
 
   addClient(ws: WebSocket) {
     this.clients.add(ws)
     ws.on('close', () => this.clients.delete(ws))
+    // Replay last collected data so clients that connect after onCollected fires still get it
+    if (this._lastCollected) {
+      ws.send(JSON.stringify({ type: 'collected', files: this._lastCollected }))
+    }
   }
 
   private broadcast(data: object) {
@@ -40,7 +45,9 @@ export class WorkshopReporter implements Reporter {
     const payload: FileInfo[] = files.map((f: any) => ({
       filepath: f.filepath,
       tests: flattenTasks(f.tasks ?? []),
-    }))
+    })).filter(f => f.tests.length > 0)
+    if (!payload.length) return
+    this._lastCollected = payload
     this.broadcast({ type: 'collected', files: payload })
   }
 

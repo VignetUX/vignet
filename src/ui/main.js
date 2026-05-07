@@ -17,6 +17,27 @@ ws.addEventListener('error', () => {
   console.warn('[workshop] WebSocket to /__workshop_api__ failed — is the plugin loaded?')
 })
 
+// Intercept the initial Vitest auto-run and change it to collect-only so nothing
+// renders on load. The orchestrator is registered synchronously by orchestrator.ts,
+// which runs after this module (both are type="module" deferred, in DOM order).
+// setTimeout(0) fires after orchestrator.ts has run, but before the Node process
+// can send the first run command (network round-trip is slower than a macrotask).
+setTimeout(() => {
+  const runner = window.__vitest_browser_runner__
+  const orchestrator = runner?.orchestrator
+  if (!orchestrator) return
+
+  const orig = orchestrator.createTesters.bind(orchestrator)
+  let initialRunDone = false
+  orchestrator.createTesters = async (options) => {
+    if (!initialRunDone) {
+      initialRunDone = true
+      return orig({ ...options, method: 'collect' })
+    }
+    return orig(options)
+  }
+}, 0)
+
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
 function injectStyles() {
@@ -153,6 +174,10 @@ function selectVariant(el, filepath, testName) {
 
 // ─── Test execution ───────────────────────────────────────────────────────────
 
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function runVariant(filepath, testName) {
   const runner = window.__vitest_browser_runner__
   if (!runner) {
@@ -165,22 +190,12 @@ function runVariant(filepath, testName) {
     return
   }
 
-  // Signal to workshopMount which variant should actually render.
-  // The tester iframe is same-origin so we can write to its window directly.
-  const testerDiv = document.getElementById('vitest-tester')
-  const iframe = testerDiv?.querySelector('iframe[data-vitest]')
-  if (iframe?.contentWindow) {
-    iframe.contentWindow.__workshop_selected_variant__ = testName
-  } else {
-    // Iframe not yet created (first run). Set on our own window as a fallback;
-    // the tester will inherit it when the iframe navigates to a same-origin page.
-    window.__workshop_selected_variant__ = testName
-  }
-
+  // Pass a FileSpecification object so testNamePattern filters which test runs.
+  // Only the matching test executes, so only that variant renders.
   orchestrator.createTesters({
-    files: [filepath],
+    files: [{ filepath, testNamePattern: new RegExp(`^${escapeRegex(testName)}$`) }],
     method: 'run',
-    providedContext: runner.providedContext ?? '{}',
+    providedContext: runner.providedContext ?? '[{}]',
   }).catch((err) => {
     console.error('[workshop] createTesters failed:', err)
   })
