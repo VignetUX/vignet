@@ -21,11 +21,11 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4",
-    "@vitest/browser": "^3",
+    "@vitest/browser": "^4",
     "playwright": "^1",
     "react": "^18",
     "react-dom": "^18",
     "typescript": "^5",
-    "vitest": "^3"
+    "vitest": "^4"
   }
 }
