@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "workshop": "vitest --browser"
+    "workshop": "vitest --browser",
+    "test": "vitest"
   },
   "dependencies": {
     "@jibe/workshop": "file:.."
