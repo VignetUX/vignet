@@ -4,9 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Storybook-style component workshop** built on top of Vitest's browser mode. The core idea: a "story" is a Vitest test file that renders a component instead of asserting. The custom orchestrator UI replaces Vitest's default `@vitest/ui` dashboard and provides variant picker, prop knobs, and viewport resizer controls.
-
-The `.gitignore` indicates a Node.js/TypeScript/Vite project with pnpm support. No code exists yet — this repo is in the planning phase.
+This is a **Storybook-style component workshop** built on top of Vitest's browser mode. The core idea: a "story" is a Vitest test file that renders a component instead of asserting. The custom orchestrator UI replaces Vitest's default `@vitest/ui` dashboard and provides variant picker. In the future, we will provide prop knobs, and viewport resizer controls.
 
 ## Architecture
 
