@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "workshop": "vitest --browser",
+    "workshop": "vite",
     "test": "vitest"
   },
   "dependencies": {
@@ -12,12 +12,11 @@
   "devDependencies": {
     "@testing-library/react": "^16",
     "@vitejs/plugin-react": "^4",
-    "@vitest/browser": "^4",
-    "@vitest/browser-preview": "^4.1.5",
-    "playwright": "^1",
+    "jsdom": "^26",
     "react": "^18",
     "react-dom": "^18",
     "typescript": "^5",
+    "vite": "^5",
     "vitest": "^4"
   }
 }

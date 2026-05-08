@@ -1,16 +1,11 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
-import { workshopPlugin } from '../src/plugin/index.js'
-import { preview } from '@vitest/browser-preview'
 
 export default defineConfig({
-  plugins: [react(), workshopPlugin()],
+  plugins: [react()],
   test: {
-    browser: {
-      enabled: true,
-      provider: preview(),
-      instances: [{ browser: 'chromium' }],
-    },
-    include: ['src/**/*.workshop.{ts,tsx}'],
+    environment: 'jsdom',
+    globals: false,
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 })

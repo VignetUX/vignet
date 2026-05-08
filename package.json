@@ -4,28 +4,23 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./plugin": "./src/plugin/index.ts"
+    "./plugin": "./src/plugin.ts",
+    "./runtime": "./src/runtime.ts"
   },
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18",
-    "vitest": ">=3",
     "vite": ">=5"
-  },
-  "dependencies": {
-    "ws": "^8"
   },
   "devDependencies": {
     "@types/node": "^22",
-    "@types/ws": "^8",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4",
-    "@vitest/browser": "^4",
-    "playwright": "^1",
     "react": "^18",
     "react-dom": "^18",
     "typescript": "^5",
+    "vite": "^5",
     "vitest": "^4"
   }
 }
