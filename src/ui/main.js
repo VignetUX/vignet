@@ -8,9 +8,13 @@ const ws = new WebSocket(`${protocol}//${location.host}/__workshop_api__`)
 injectStyles()
 buildLayout()
 
+let sidebarPopulated = false
 ws.addEventListener('message', (e) => {
   const msg = JSON.parse(e.data)
-  if (msg.type === 'collected') renderFileTree(msg.files)
+  if (msg.type === 'collected' && !sidebarPopulated) {
+    sidebarPopulated = true
+    renderFileTree(msg.files)
+  }
 })
 
 ws.addEventListener('error', () => {
@@ -190,10 +194,11 @@ function runVariant(filepath, testName) {
     return
   }
 
-  // Pass a FileSpecification object so testNamePattern filters which test runs.
-  // Only the matching test executes, so only that variant renders.
+  // testNamePattern uses $ anchor only (no ^) because getTaskFullName() prepends
+  // a space for top-level tests: `" primary"`. The $ anchor is sufficient to
+  // uniquely identify the variant while tolerating the leading space.
   orchestrator.createTesters({
-    files: [{ filepath, testNamePattern: new RegExp(`^${escapeRegex(testName)}$`) }],
+    files: [{ filepath, testNamePattern: new RegExp(escapeRegex(testName) + '$') }],
     method: 'run',
     providedContext: runner.providedContext ?? '[{}]',
   }).catch((err) => {

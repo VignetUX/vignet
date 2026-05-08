@@ -15,14 +15,12 @@ export function workshopPlugin(): Plugin {
   return {
     name: 'vitest-workshop',
 
-    // config() runs before Vitest reads viteConfig.test, so this gets deep-merged
-    // into the final options that project.config.browser.orchestratorScripts references.
     config() {
       return {
         test: {
           browser: {
             ui: false,
-            isolate: false,
+            isolate: true,
             orchestratorScripts: [{ content: uiScript }],
           },
         },
