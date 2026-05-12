@@ -6,8 +6,8 @@
     "jibe": "./cli.mjs"
   },
   "scripts": {
-    "build": "tsup src/cli.ts --format esm --out-dir dist --target node20",
-    "dev": "tsup src/cli.ts --format esm --out-dir dist --target node20 --watch"
+    "build": "tsup src/cli/cli.ts --format esm --out-dir dist --target node20",
+    "dev": "tsup src/cli/cli.ts --format esm --out-dir dist --target node20 --watch"
   },
   "exports": {
     ".": "./src/index.ts",
