@@ -1,13 +1,19 @@
 import { createServer } from 'vite'
-import type { Plugin } from 'vite'
+import react from '@vitejs/plugin-react'
+import { fileURLToPath } from 'url'
+import { join } from 'path'
+
+const jibeDir = fileURLToPath(new URL('../', import.meta.url))
 
 export async function startJibeServer(): Promise<void> {
   const server = await createServer({
+    configFile: false,
     root: process.cwd(),
     server: {
       open: '/',
+      fs: { allow: [process.cwd(), jibeDir] },
     },
-    plugins: [jibeServerPlugin()],
+    plugins: [react(), jibeServerPlugin()],
   })
 
   await server.listen()
@@ -24,23 +30,27 @@ export async function startJibeServer(): Promise<void> {
  * This is the same pattern Vitest uses in its browser plugin
  * (`packages/browser/src/node/plugin.ts`).
  */
-function jibeServerPlugin(): Plugin {
+function jibeServerPlugin() {
+  const mainEntry = join(jibeDir, 'src/ui/main.tsx')
   return {
     name: 'jibe:server',
     configureServer(server) {
-      server.middlewares.use('/', (_req, res) => {
-        res.writeHead(200, { 'Content-Type': 'text/html' })
-        res.end(`<!DOCTYPE html>
+      server.middlewares.use(async (req: any, res: any, next: () => void) => {
+        if (req.url !== '/') { next(); return }
+        const raw = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <title>Jibe Workshop</title>
   </head>
   <body>
-    <h1>Jibe Workshop</h1>
-    <p>Coming soon...</p>
+    <div id="root"></div>
+    <script type="module" src="/@fs${mainEntry}"></script>
   </body>
-</html>`)
+</html>`
+        const html = await server.transformIndexHtml('/', raw)
+        res.writeHead(200, { 'Content-Type': 'text/html' })
+        res.end(html)
       })
     },
   }
