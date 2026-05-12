@@ -53,6 +53,12 @@ iframe  (example/frame.html + example/src/frame.ts)
 | `example/src/Button.tsx` | Example component |
 | `example/src/Button.test.tsx` | Example test file — unmodified standard Vitest tests |
 
+### Jibe CLI server (`src/node/server.ts`)
+
+`jibe` is a **standalone CLI**, not a consumer-facing Vite plugin. Like Vitest, it creates its own Vite server via `createServer()`. Consumers never add anything to their `vite.config.ts` to use jibe.
+
+`startJibeServer()` passes an internal plugin to `createServer()` to register its HTTP middleware. This plugin wrapper is required for correct middleware ordering: by the time `createServer()` returns, Vite has already registered its internal middleware (including the SPA HTML fallback). A plugin's `configureServer` hook runs *before* that registration, so jibe's middleware intercepts requests first. Adding to `server.middlewares` after `createServer()` returns would place the handler after Vite's fallback. This is the same pattern Vitest uses in its browser plugin (`packages/browser/src/node/plugin.ts`).
+
 ### Plugin internals
 
 `workshopPlugin()` in `src/plugin.ts`:
