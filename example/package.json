@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "workshop": "vite",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
     "test": "vitest"
   },
   "dependencies": {
