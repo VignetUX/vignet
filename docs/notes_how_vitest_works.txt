@@ -1,0 +1,168 @@
+❯ Now give me an overview of the different components in @packages/vitest/ and how they interact with vite, as well as how they run tests 
+   etc. I'm interested in something like "the life of a vitest test" and the calls that occur                                             
+  ⎿  Listed directory packages/vitest/
+
+⏺ Let me explore the key source areas in parallel to give you a thorough answer.
+
+⏺ Explore(Explore Vitest node orchestration layer)
+  ⎿  Done (16 tool uses · 65.9k tokens · 53s)
+  (ctrl+o to expand)
+     
+⏺ Here's the full picture of "the life of a Vitest test":
+
+  ---
+  Architecture Overview
+  
+  Key Classes & Files
+
+  ┌──────────────────────┬────────────────────────────────┬─────────────────────────────────────────────────────────────────┐
+  │        Class         │              File              │                         Responsibility                          │
+  ├──────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+  │ Vitest               │ src/node/core.ts               │ Global orchestrator — config, lifecycle, coordinates everything │
+  ├──────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+  │ TestProject          │ src/node/project.ts            │ One workspace project; has its own ViteDevServer                │
+  ├──────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+  │ TestSpecification    │ src/node/test-specification.ts │ Metadata tuple: file + project + pool + which tests to run      │
+  ├──────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+  │ VitestSpecifications │ src/node/specifications.ts     │ Globs files, caches specs, filters by --changed/--related       │
+  ├──────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+  │ ProcessPool          │ src/node/pool.ts               │ Top-level runner — groups specs, dispatches to workers          │
+  ├──────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+  │ Pool                 │ src/node/pools/pool.ts         │ Worker queue with concurrency control                           │
+  ├──────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+  │ PoolRunner           │ src/node/pools/poolRunner.ts   │ Manages one worker's lifecycle, RPC bridge to it                │
+  ├──────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+  │ StateManager         │ src/node/state.ts              │ Tracks test results, errors, console logs                       │
+  ├──────────────────────┼────────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+  │ TestRun              │ src/node/test-run.ts           │ Fires lifecycle events → reporters                              │
+  └──────────────────────┴────────────────────────────────┴─────────────────────────────────────────────────────────────────┘
+
+  ---
+  The Life of a Test
+
+  1. Startup
+
+  vitest.mjs
+    → src/node/cli.ts → src/node/cli/cac.ts
+      → start() → startVitest() [cli-api.ts]
+        → createVitest() [create.ts]
+            → new Vitest()
+            → createViteServer(inlineConfig) [vite.ts]
+                → Vite's createServer()   ← real Vite dev server
+            → server._setServer()         ← wires everything together
+
+  Each workspace project also gets its own ViteDevServer instance (TestProject.vite). This is how different projects can have different
+  Vite configs, plugins, and environments.
+
+  ---
+  2. File Discovery
+
+  Vitest.start()  [core.ts]
+    → VitestSpecifications.globTestSpecifications(filters)
+        → for each TestProject:
+            project.globTestFiles()      ← glob patterns from config
+            → creates TestSpecification per file
+                - moduleId (abs path)
+                - which project
+                - which pool ("forks"|"threads"|"vmForks"|"browser"|"typescript")
+                - optional: testLines, testNamePattern, testIds
+
+  ---
+  3. Scheduling & Worker Dispatch
+
+  Vitest.runFiles(specs)
+    → createPool(ctx)          ← selects browser pool or process pool
+    → pool.runTests(specs)
+        → groupSpecs()         ← groups by environment (node/jsdom/happy-dom/etc.)
+                                 respects isolate, sequence.groupOrder, sharding
+        → Pool.schedule()
+            → PoolRunner.request('run', context)
+                → sends serialized WorkerExecuteContext via Birpc RPC
+                → worker process/thread receives it
+
+  Worker types (all in src/node/pools/):
+  - ForksPoolWorker — child processes via node:child_process
+  - ThreadsPoolWorker — node:worker_threads
+  - VmForksPoolWorker / VmThreadsPoolWorker — same but run in Node vm context
+  - BrowserPool — dispatches to Playwright/WebDriverIO
+
+  ---
+  4. Module Loading (in the Worker)
+  
+  This is where Vite does its work. When the worker needs to import a test file:
+
+  Worker imports test file
+    → ServerModuleRunner (wraps Vite's ModuleRunner)
+        → Vite transforms the file:
+            - TypeScript → JS  (via esbuild/oxc plugin)
+            - JSX → JS
+            - vitest plugins run (coverage instrumentation, mocking, etc.)
+            - aliases resolved
+        → transformed module executed in worker context
+
+  The ServerModuleRunner uses Vite's DevEnvironment and its module graph, which is how watch mode knows which files to invalidate and
+  re-run when a source file changes.
+
+  ---
+  5. Test Collection & Execution (in the Worker)
+
+  Worker executes transformed test file
+    → describe() / test() / it() calls register tasks
+        → @vitest/runner collects the task tree
+    → Runner executes tests:
+        → beforeAll / beforeEach hooks
+        → test fn()
+        → afterEach / afterAll hooks
+        → results sent back via RPC → StateManager.updateTasks()
+
+  ---
+  6. Reporting
+
+  TestRun events fire at each stage:
+    onTestRunStart → onTestModuleCollected → onTaskUpdate (per test) → onTestRunEnd
+
+  Each reporter (default/verbose/json/etc.) receives these events
+  Coverage provider generates report after all tests finish
+
+  6. Reporting
+
+  TestRun events fire at each stage:
+    onTestRunStart → onTestModuleCollected → onTaskUpdate (per test) → onTestRunEnd
+  
+  The ServerModuleRunner uses Vite's DevEnvironment and its module graph, which is how watch mode knows which files to invalidate and
+  re-run when a source file changes.
+
+  ---
+  5. Test Collection & Execution (in the Worker)
+
+  Worker executes transformed test file
+    → describe() / test() / it() calls register tasks
+        → @vitest/runner collects the task tree
+    → Runner executes tests:
+        → beforeAll / beforeEach hooks
+        → test fn()
+        → afterEach / afterAll hooks
+        → results sent back via RPC → StateManager.updateTasks()
+
+  ---
+  6. Reporting
+
+  TestRun events fire at each stage:
+    onTestRunStart → onTestModuleCollected → onTaskUpdate (per test) → onTestRunEnd
+
+  Each reporter (default/verbose/json/etc.) receives these events
+  Coverage provider generates report after all tests finish
+
+  ---
+  Watch Mode
+
+  When a file changes, Vite's HMR detects it → Vitest.invalidateFile() clears the module from Vite's module graph → scheduleRerun()
+  debounces (100ms) → only affected specs re-run. This is why Vitest watch mode is fast: it reuses the already-running Vite server and
+  only re-transforms changed files.
+
+  ---
+  The Vite Integration in One Sentence
+
+  Vitest uses Vite purely as a module transformation and resolution engine — it never serves HTML or runs a browser dev server for tests.
+  The ViteDevServer exists so that Vitest can run your test files through the exact same plugin pipeline (TypeScript, aliases, mocks,
+  coverage) that your app uses.
