@@ -5,14 +5,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "vitest"
+    "test": "vitest",
+    "jibe": "jibe"
   },
   "dependencies": {
-    "@jibe/workshop": "file:.."
   },
   "devDependencies": {
     "@testing-library/react": "^16",
     "@vitejs/plugin-react": "^4",
+    "@jibe/workshop": "file:..",
     "jsdom": "^26",
     "react": "^18",
     "react-dom": "^18",
