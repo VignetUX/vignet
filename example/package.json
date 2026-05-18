@@ -13,7 +13,7 @@
   "devDependencies": {
     "@testing-library/react": "^16",
     "@vitejs/plugin-react": "^4",
-    "@jibe/workshop": "file:..",
+    "@jibe/workshop": "workspace:*",
     "jsdom": "^26",
     "react": "^18",
     "react-dom": "^18",
