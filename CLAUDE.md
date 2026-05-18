@@ -8,12 +8,12 @@ This is a **Storybook-style component workshop** for React components. The core 
 
 ## Architecture
 
-**Chosen approach: plain Vite dev server + custom iframe runtime.** Vitest browser mode was tried first (iter 1) but rejected because:
+**Chosen approach: Vite dev server that interfaces with a vitest instance/server.** Vitest browser mode was tried first (iter 1) but rejected because:
 - Vitest has no concept of "render phase" vs "assertion phase" — you'd be fighting its batch-oriented runner
 - Parameter injection has no natural hook point in Vitest's execution model
 - The orchestrator RPC/WebSocket layer is unstable internal API that breaks across Vitest versions
 
-The current approach uses Vite only as a module transformer and dev server. There is no Playwright, no Vitest runner, no WebSocket orchestrator.
+The current approach uses vitest to leverage its transforms, etc but replaces the orchestrator + browser mode frontend with a custom Jibe vite server frontend. The latter passes state to the vitest server via the shared vitest instance, similar to how vitest browser mode functions.
 
 ### How it works
 
