@@ -9,7 +9,7 @@ const RESOLVED_ID = '\0' + VIRTUAL_ID
 // test/it capture bodies into window.__workshop_registry__; expect is a no-op proxy.
 const VIRTUAL_VITEST_SRC = `
 const noop = () => {}
-const noopMatcher = new Proxy({}, { get: () => noopMatcher })
+const noopMatcher = new Proxy(noop, { get: () => noopMatcher, apply: () => noopMatcher })
 
 export function test(name, fn) {
   ;(window.__workshop_registry__ = window.__workshop_registry__ || []).push({ name, fn })
