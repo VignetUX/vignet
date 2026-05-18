@@ -8,12 +8,12 @@ This is a **Storybook-style component workshop** for React components. The core 
 
 ## Architecture
 
-**Chosen approach: plain Vite dev server + custom iframe runtime.** Vitest browser mode was tried first (iter 1) but rejected because:
+**Chosen approach: Vite dev server that interfaces with a vitest instance/server.** Vitest browser mode was tried first (iter 1) but rejected because:
 - Vitest has no concept of "render phase" vs "assertion phase" — you'd be fighting its batch-oriented runner
 - Parameter injection has no natural hook point in Vitest's execution model
 - The orchestrator RPC/WebSocket layer is unstable internal API that breaks across Vitest versions
 
-The current approach uses Vite only as a module transformer and dev server. There is no Playwright, no Vitest runner, no WebSocket orchestrator.
+The current approach uses vitest to leverage its transforms, etc but replaces the orchestrator + browser mode frontend with a custom Jibe vite server frontend. The latter passes state to the vitest server via the shared vitest instance, similar to how vitest browser mode functions.
 
 ### How it works
 
@@ -41,21 +41,28 @@ iframe  (example/frame.html + example/src/frame.ts)
 
 | File | Purpose |
 |---|---|
-| `src/plugin.ts` | Vite plugin: virtual `vitest` shim, `/__workshop_files__` endpoint |
+| `src/cli/cli.ts` | CLI entry point — calls `startJibeServer()` |
+| `src/node/server.ts` | Standalone Vite server: serves workshop UI, opens browser |
+| `src/ui/App.tsx` | React workshop UI app (dummy shell; sidebar + preview pane planned) |
+| `src/ui/main.tsx` | React entry point — mounts `App` into `#root` |
+| `src/plugin.ts` | Vite plugin: virtual `vitest` shim, `/__workshop_files__` endpoint (planned for iframe integration) |
 | `src/runtime.ts` | `param(key, default)` helper for future parameterized inputs |
 | `src/index.ts` | Package entry — re-exports `param` |
-| `example/index.html` | Workshop UI shell |
-| `example/frame.html` | iframe shell |
-| `example/src/ui.ts` | Workshop UI: fetches file list, manages iframe, renders sidebar |
-| `example/src/frame.ts` | iframe entry: imports test file, registers tests, runs selected variant |
-| `example/vite.config.ts` | Workshop Vite config (uses `workshopPlugin`) |
-| `example/vitest.config.ts` | Standard jsdom Vitest config for `npm test` |
-| `example/src/Button.tsx` | Example component |
+| `example/src/Button.tsx` | Example consumer component |
 | `example/src/Button.test.tsx` | Example test file — unmodified standard Vitest tests |
+| `example/vitest.config.ts` | Standard jsdom Vitest config for `npm test` |
 
-### Plugin internals
+### Jibe CLI server (`src/node/server.ts`)
 
-`workshopPlugin()` in `src/plugin.ts`:
+`jibe` is a **standalone CLI**, not a consumer-facing Vite plugin. Like Vitest, it creates its own Vite server via `createServer()` with `configFile: false` (consumer's `vite.config.ts` is intentionally ignored). Consumers never touch their Vite config.
+
+`startJibeServer()` uses an internal plugin to register its HTTP middleware. This plugin wrapper is required for correct middleware ordering: by the time `createServer()` returns, Vite has already registered its internal middleware (including the SPA HTML fallback). A plugin's `configureServer` hook runs *before* that registration, so jibe's middleware intercepts `/` first. This is the same pattern Vitest uses in `packages/browser/src/node/plugin.ts`.
+
+The middleware serves an HTML shell that loads `src/ui/main.tsx` via `/@fs/<absolute-path>`. Vite's `/@fs/` escape hatch serves files outside `root` when listed in `server.fs.allow`. The HTML is passed through `server.transformIndexHtml('/', html)` before being sent — this injects the `@vitejs/plugin-react` Fast Refresh preamble. Without it, React Fast Refresh throws "can't detect preamble". This matches Vitest's tester middleware pattern (`serverTester.ts` calls `vite.transformIndexHtml(url, testerHtml)`); the difference is we pass `'/'` as the URL since our HTML is generated in-memory rather than read from a file.
+
+### Plugin internals (planned — not yet wired to the CLI server)
+
+`workshopPlugin()` in `src/plugin.ts` is the planned mechanism for iframe test loading. It will be added to the jibe server's plugin list once the iframe runtime is integrated:
 - `enforce: 'pre'` — runs before other plugins so the `vitest` alias wins
 - `config()` hook returns `{ optimizeDeps: { exclude: ['vitest'] } }` — prevents Vite from pre-bundling the real `vitest` package, which would bypass `resolveId`
 - `resolveId('vitest')` → returns `'\0virtual:workshop-vitest'`
@@ -81,9 +88,14 @@ In workshop mode: `param()` reads from `window.__workshop_params__` (set by futu
 ## Running
 
 ```bash
-cd example
-npm run workshop   # Vite dev server → open http://localhost:5173
-npm test           # Standard Vitest with jsdom — all tests pass with real assertions
+# In the root package — rebuild the CLI after changes to src/
+npm run build
+
+# In example/ — start the jibe workshop server
+cd example && npm run jibe   # opens http://localhost:5173/
+
+# In example/ — run standard Vitest tests (real assertions, jsdom)
+cd example && npm test
 ```
 
 ## Planned Directory Structure

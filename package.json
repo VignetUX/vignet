@@ -6,8 +6,8 @@
     "jibe": "./cli.mjs"
   },
   "scripts": {
-    "build": "tsup src/cli/cli.ts --format esm --out-dir dist --target node20",
-    "dev": "tsup src/cli/cli.ts --format esm --out-dir dist --target node20 --watch"
+    "build": "tsup",
+    "dev": "tsup --watch"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -15,20 +15,23 @@
     "./runtime": "./src/runtime.ts"
   },
   "peerDependencies": {
+    "@vitejs/plugin-react": ">=4",
     "react": ">=18",
     "react-dom": ">=18",
-    "vite": ">=5"
+    "vite": ">=6",
+    "vitest": "^4.1.6"
   },
   "devDependencies": {
     "@types/node": "^22",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4",
+    "cac": "^7.0.0",
     "react": "^18",
     "react-dom": "^18",
     "tsup": "^8.5.1",
     "typescript": "^5",
-    "vite": "^5",
-    "vitest": "^4"
-  }
+    "vite": "^6"
+  },
+  "packageManager": "pnpm@11.1.2+sha512.415a1cc25974731e75455c1468371be74c5aa5fb7621b50d4056d222451609f11412f23fd602e6169f1e060466641f798597e1be961a10688836a67b16569499"
 }
