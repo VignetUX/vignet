@@ -1,11 +1,11 @@
-import { createServer } from 'vite'
+import { createServer, type ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'url'
 import { join } from 'path'
 
 const jibeDir = fileURLToPath(new URL('../', import.meta.url))
 
-export async function startJibeServer(): Promise<void> {
+export async function startJibeServer(vitest: unknown): Promise<void> {
   const server = await createServer({
     configFile: false,
     root: process.cwd(),
@@ -34,7 +34,7 @@ function jibeServerPlugin() {
   const mainEntry = join(jibeDir, 'src/ui/main.tsx')
   return {
     name: 'jibe:server',
-    configureServer(server) {
+    configureServer(server: ViteDevServer) {
       server.middlewares.use(async (req: any, res: any, next: () => void) => {
         if (req.url !== '/') { next(); return }
         const raw = `<!DOCTYPE html>
