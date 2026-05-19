@@ -1,24 +1,29 @@
 {
-  "name": "workshop-example",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "test": "vitest",
-    "jibe": "jibe"
-  },
-  "dependencies": {
-  },
-  "devDependencies": {
-    "@testing-library/react": "^16",
-    "@vitejs/plugin-react": "^4",
-    "@jibe/workshop": "workspace:*",
-    "jsdom": "^26",
-    "react": "^18",
-    "react-dom": "^18",
-    "typescript": "^5",
-    "vite": "^6",
-    "vitest": "^4"
-  }
+    "name": "workshop-example",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc -b && vite build",
+        "test": "vitest",
+        "jibe": "jibe"
+    },
+    "dependencies": {
+        "@react-router/node": "^7.15.1",
+        "@react-router/serve": "^7.15.1",
+        "isbot": "^5.1.40",
+        "react": "^18",
+        "react-dom": "^18.3.1",
+        "react-router-dom": "^7.15.1"
+    },
+    "devDependencies": {
+        "@jibe/workshop": "workspace:*",
+        "@react-router/dev": "^7.15.1",
+        "@testing-library/react": "^16",
+        "@vitejs/plugin-react": "^4",
+        "jsdom": "^26",
+        "typescript": "^5",
+        "vite": "^6",
+        "vitest": "^4"
+    }
 }
