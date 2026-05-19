@@ -13,16 +13,15 @@ This is a **Storybook-style component workshop** for React components. The core 
 - Parameter injection has no natural hook point in Vitest's execution model
 - The orchestrator RPC/WebSocket layer is unstable internal API that breaks across Vitest versions
 
-The current approach uses vitest to leverage its transforms, etc but replaces the orchestrator + browser mode frontend with a custom Jibe vite server frontend. The latter passes state to the vitest server via the shared vitest instance, similar to how vitest browser mode functions.
+The current approach uses vitest to leverage its transforms, etc but replaces the orchestrator + browser mode frontend with a custom Jibe vite server frontend. The vitest instance is currently used for its Vite server transforms (JSX/TS resolution). Deeper integration — passing state back through the shared instance — is planned future work.
 
 ### How it works
 
 ```
-Workshop UI  (example/index.html + example/src/ui.ts)
-  sidebar: file list + test variant list
+Workshop UI  (src/ui/App.tsx, served via src/node/server.ts)
   hosts an <iframe>
-    ↓  iframe.src = /frame.html?file=/src/Button.test.tsx&run=1
-iframe  (example/frame.html + example/src/frame.ts)
+    ↓  iframe.src = /frame?file=/src/Button.test.tsx&run=0
+iframe  (src/frame.ts, served at /frame by src/node/server.ts)
   sets window.__workshop_registry__ = []
   dynamically imports the test file
     ↓  import { test, expect } from 'vitest'  →  virtual no-op module
@@ -41,11 +40,12 @@ iframe  (example/frame.html + example/src/frame.ts)
 
 | File | Purpose |
 |---|---|
-| `src/cli/cli.ts` | CLI entry point — calls `startJibeServer()` |
-| `src/node/server.ts` | Standalone Vite server: serves workshop UI, opens browser |
-| `src/ui/App.tsx` | React workshop UI app (dummy shell; sidebar + preview pane planned) |
+| `src/cli/cli.ts` | CLI entry — calls `createVitest('test', {watch:true})` then `startJibeServer(vitest)` |
+| `src/node/server.ts` | Standalone Vite server: serves workshop UI + frame endpoint, opens browser |
+| `src/frame.ts` | Iframe runtime — imports test file, captures registry, calls test fn to render component |
+| `src/ui/App.tsx` | React workshop UI — iframe host + variant trigger button |
 | `src/ui/main.tsx` | React entry point — mounts `App` into `#root` |
-| `src/plugin.ts` | Vite plugin: virtual `vitest` shim, `/__workshop_files__` endpoint (planned for iframe integration) |
+| `src/plugin.ts` | Vite plugin: virtual `vitest` shim + `/__workshop_files__` endpoint |
 | `src/runtime.ts` | `param(key, default)` helper for future parameterized inputs |
 | `src/index.ts` | Package entry — re-exports `param` |
 | `example/src/Button.tsx` | Example consumer component |
@@ -60,9 +60,9 @@ iframe  (example/frame.html + example/src/frame.ts)
 
 The middleware serves an HTML shell that loads `src/ui/main.tsx` via `/@fs/<absolute-path>`. Vite's `/@fs/` escape hatch serves files outside `root` when listed in `server.fs.allow`. The HTML is passed through `server.transformIndexHtml('/', html)` before being sent — this injects the `@vitejs/plugin-react` Fast Refresh preamble. Without it, React Fast Refresh throws "can't detect preamble". This matches Vitest's tester middleware pattern (`serverTester.ts` calls `vite.transformIndexHtml(url, testerHtml)`); the difference is we pass `'/'` as the URL since our HTML is generated in-memory rather than read from a file.
 
-### Plugin internals (planned — not yet wired to the CLI server)
+### Plugin internals
 
-`workshopPlugin()` in `src/plugin.ts` is the planned mechanism for iframe test loading. It will be added to the jibe server's plugin list once the iframe runtime is integrated:
+`workshopPlugin()` in `src/plugin.ts` is included in the jibe server's plugin list and handles iframe test loading:
 - `enforce: 'pre'` — runs before other plugins so the `vitest` alias wins
 - `config()` hook returns `{ optimizeDeps: { exclude: ['vitest'] } }` — prevents Vite from pre-bundling the real `vitest` package, which would bypass `resolveId`
 - `resolveId('vitest')` → returns `'\0virtual:workshop-vitest'`
