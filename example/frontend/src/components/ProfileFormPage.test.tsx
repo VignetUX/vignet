@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { ProfileFormPage } from './ProfileFormPage'
-import { story } from 'jibe-ux'
 
 const SAMPLE_DATA = {
   name: 'Jane Doe',
@@ -44,7 +43,7 @@ describe('ProfileFormPage', () => {
   })
 
   it('shows an empty form when no id is in the url', () => {
-    render(story('ProfileFormPage-Empty', ProfileFormPageStory, {}))
+    render(<ProfileFormPage />);
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Name')).toHaveValue('')
     expect(screen.getByLabelText('Occupation')).toHaveValue('')
@@ -52,7 +51,7 @@ describe('ProfileFormPage', () => {
 
   it('shows a loading spinner while fetching', () => {
     vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}))
-    render(story('ProfileFormPage-Loading', ProfileFormPageStory, { id: '123' }))
+    renderAtRoute('123');
     expect(screen.getByRole('progressbar')).toBeInTheDocument()
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
   })

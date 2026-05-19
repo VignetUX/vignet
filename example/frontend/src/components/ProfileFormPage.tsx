@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { TextField, Stack, CircularProgress } from '@mui/material';
-import { Header } from '../stories/Header';
-import { Button } from './Button';
+import { Button } from '../Button';
 
 interface ProfileFormData {
   name: string;
@@ -42,7 +41,7 @@ export const ProfileFormPage = () => {
 
   return (
     <div>
-      <Header />
+      <h1>Acme</h1>
       <main style={{ maxWidth: 480, margin: '48px auto', padding: '0 16px' }}>
         {loading ? (
           <Stack sx={{ alignItems: 'center', paddingTop: 6 }}>
