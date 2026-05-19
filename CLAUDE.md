@@ -48,9 +48,9 @@ iframe  (src/frame.ts, served at /frame by src/node/server.ts)
 | `src/plugin.ts` | Vite plugin: virtual `vitest` shim + `/__workshop_files__` endpoint |
 | `src/runtime.ts` | `param(key, default)` helper for future parameterized inputs |
 | `src/index.ts` | Package entry — re-exports `param` |
-| `example/src/Button.tsx` | Example consumer component |
-| `example/src/Button.test.tsx` | Example test file — unmodified standard Vitest tests |
-| `example/vitest.config.ts` | Standard jsdom Vitest config for `npm test` |
+| `example/frontend/src/Button.tsx` | Example consumer component |
+| `example/frontend/src/Button.test.tsx` | Example test file — unmodified standard Vitest tests |
+| `example/frontend/vitest.config.ts` | Standard jsdom Vitest config for `npm test` |
 
 ### Jibe CLI server (`src/node/server.ts`)
 
@@ -91,11 +91,11 @@ In workshop mode: `param()` reads from `window.__workshop_params__` (set by futu
 # In the root package — rebuild the CLI after changes to src/
 npm run build
 
-# In example/ — start the jibe workshop server
-cd example && npm run jibe   # opens http://localhost:5173/
+# In example/frontend/ — start the jibe workshop server
+cd example/frontend && npm run jibe   # opens http://localhost:5173/
 
-# In example/ — run standard Vitest tests (real assertions, jsdom)
-cd example && npm test
+# In example/frontend/ — run standard Vitest tests (real assertions, jsdom)
+cd example/frontend && npm test
 ```
 
 ## Planned Directory Structure
