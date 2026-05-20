@@ -9,6 +9,8 @@ const jibeDir = fileURLToPath(new URL('../', import.meta.url))
 export async function startJibeServer(vitest: unknown): Promise<void> {
   const server = await createServer({
     configFile: false,
+    // Disables Vite's SPA fallback so that test memoryroutes etc are disabled. Jibe only exposes specific routes.
+    appType: 'custom',
     root: process.cwd(),
     server: {
       open: '/',

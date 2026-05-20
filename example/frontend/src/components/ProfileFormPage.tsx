@@ -69,7 +69,7 @@ export const ProfileFormPage = () => {
             onChange={handleChange('occupation')}
             fullWidth
           />
-          <Button primary label="Submit" onClick={handleSubmit} />
+          <Button label="Submit" onClick={handleSubmit} />
         </Stack>
         )}
       </main>
