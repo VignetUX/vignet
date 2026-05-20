@@ -1,5 +1,5 @@
 # Jibe vitest prototype
-com
+
 ## Building and running
 
 For active CLI development, run pnpm dev (tsup --watch) in root — it rebuilds dist/cli.js automatically on every save. Then each pnpm jibe in example/frontend picks up the latest build instantly.
