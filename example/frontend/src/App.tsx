@@ -5,11 +5,13 @@ import { Routes, Route } from 'react-router-dom'
 import { Button } from './Button'
 import './App.css'
 import { ProfileFormPage } from './components/ProfileFormPage'
+import { WeatherWidget } from './components/WeatherWidget'
 
 function App() {
   return (
     <Routes>
       <Route path="/userform/:id" element={<ProfileFormPage />} />
+      <Route path="/weather" element={<WeatherWidget city="London" />} />
       <Route path="/" element={
         <>
           <section id="center">
