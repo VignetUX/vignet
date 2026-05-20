@@ -2,11 +2,12 @@ import { createServer, type ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'url'
 import { join } from 'path'
-import { workshopPlugin } from '../plugin.js'
+import { workshopPlugin, getMockerPlugins } from '../plugin.js'
 
 const jibeDir = fileURLToPath(new URL('../', import.meta.url))
 
 export async function startJibeServer(vitest: unknown): Promise<void> {
+  const mockerPlugins = await getMockerPlugins()
   const server = await createServer({
     configFile: false,
     // Disables Vite's SPA fallback so that test memoryroutes etc are disabled. Jibe only exposes specific routes.
@@ -16,7 +17,7 @@ export async function startJibeServer(vitest: unknown): Promise<void> {
       open: '/',
       fs: { allow: [process.cwd(), jibeDir] },
     },
-    plugins: [react(), workshopPlugin(), jibeServerPlugin(vitest)],
+    plugins: [react(), workshopPlugin(), ...mockerPlugins, jibeServerPlugin(vitest)],
   })
 
   await server.listen()
@@ -60,6 +61,11 @@ function jibeServerPlugin(_vitest: unknown) {
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // dynamicImportPlugin wraps all import() calls with __vitest_mocker__.wrapDynamicImport.
+      // The mocker is only active in the test iframe, so provide a passthrough here.
+      if (!window["__vitest_mocker__"]) window["__vitest_mocker__"] = { wrapDynamicImport: fn => fn() };
+    </script>
     <script type="module" src="/@fs${mainEntry}"></script>
   </body>
 </html>`

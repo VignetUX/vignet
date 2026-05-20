@@ -1,82 +1,84 @@
 # Module mocking in the Jibe workshop
 
-## Status: not yet implemented — feasible future work
+## Status: implemented via `@vitest/mocker`
+
+`vi.mock()`, `vi.unmock()`, `vi.doMock()`, and `vi.doUnmock()` are fully supported, including
+both auto-mocks (`vi.mock('id')`) and factory mocks (`vi.mock('id', () => ...)`).
 
 ---
 
-## Background: why it was previously infeasible
+## Architecture
 
-ESM imports are hoisted — they execute before any module body code:
+Jibe delegates the entire mock infrastructure to `@vitest/mocker`, a standalone package that
+ships with vitest. `@vitest/mocker` communicates over **Vite's built-in HMR WebSocket**
+(`import.meta.hot` client-side, `server.ws` server-side) — it has no dependency on vitest's
+orchestrator, birpc, or any other vitest-specific RPC layer.
 
-```js
-import _ from 'lodash'       // runs FIRST in ESM
-vi.mock('lodash', () => ...) // would run AFTER lodash is already imported
-```
-
-Vitest solves this with a Vite transform plugin that physically rewrites test files to move `vi.mock(...)` calls before the import statements. Without that transform, the mock registration is always too late.
-
-Jibe previously imported test files via a bare `await import(file)` in `frame.ts`. There was no hook point to set up interception before the file's static imports ran. This made module mocking infeasible without replicating vitest's hoist transform.
-
----
-
-## What changed with the `collectTests` adoption
-
-Jibe now uses `@vitest/runner`'s `collectTests([file], runner)`, which imports the file through a controlled `runner.importFile(filepath)` call. This gives jibe **a hook point before the import executes**.
-
-The new approach:
-
-1. Fetch the raw file source before `runner.importFile` (one extra `fetch` call to the Vite server)
-2. Parse `vi.mock('module-id')` calls from the source (regex or lightweight AST scan)
-3. Register those module IDs with the Vite server via a new `/__workshop_mock__` endpoint
-4. A Vite `resolveId`/`load` hook intercepts requests for mocked module IDs and serves mocked versions
-5. Then call `runner.importFile` — the test file's static imports now hit the interceptors
-
-This eliminates the need for the hoist transform: since the interception is set up server-side before the import is triggered, the mocked modules are in place when the file's static imports evaluate.
+The original feasibility doc incorrectly stated that `ModuleMockerServerInterceptor` "requires
+the vitest birpc bridge." That was wrong: inspection of `@vitest/mocker/dist/node.js` and the
+interceptor chunk shows only standard `hot.send`/`hot.on` calls. The `mockerPlugin()` export
+even includes the source comment: *"this is an implementation for public usage — vitest doesn't
+use this plugin directly."*
 
 ---
 
-## Implementation paths
+## What `@vitest/mocker` provides
 
-### Auto-mocks — no factory (estimated ~80 lines)
+| Component | What it does |
+|---|---|
+| `hoistMocksPlugin` | Vite `transform` — AST-hoists `vi.mock()` calls before import statements, converts static imports to dynamic |
+| `interceptorPlugin` | Registers `server.ws.on("vitest:interceptor:*")` handlers; maintains `MockerRegistry`; serves mocked modules |
+| `automockPlugin` | Vite `transform` — stubs exports when URL has `?mock=automock` |
+| `dynamicImportPlugin` | Wraps `import()` calls with `globalThis.__vitest_mocker__.wrapDynamicImport` |
+| `auto-register.js` | Side-effect import — calls `registerModuleMocker(() => new ModuleMockerServerInterceptor())`, sets `globalThis.__vitest_mocker__` |
 
-```js
-vi.mock('lodash') // no second argument
-```
-
-The server analyzes the real module's exports and returns auto-generated `vi.fn()` stubs for each. No factory needed, so no browser/server JS-execution boundary to cross.
-
-Work required:
-- New `/__workshop_mock__` endpoint to receive mock registrations
-- `resolveId` hook to redirect registered IDs to a virtual module
-- `load` hook to generate the auto-mock source (analyze real module, emit `vi.fn()` per export)
-
-### Factory mocks (estimated ~150 lines)
-
-```js
-vi.mock('lodash', () => ({ cloneDeep: vi.fn() }))
-```
-
-The factory function must run in the browser (so `vi.fn()` and other browser-context globals are in scope). The factory is defined in the test file, which creates a timing problem: we need the factory before the file is imported, but the factory is only available after.
-
-The escape hatch: a Vite source transform that extracts factory functions into separate virtual modules. The virtual module is evaluated lazily at mock-import time — the factory runs in the browser when `lodash` is first imported by the test file.
-
-Work required: everything in auto-mocks, plus a Vite `transform` hook that rewrites `vi.mock('id', factory)` to store the factory in a virtual module registry.
+`mockerPlugin()` from `@vitest/mocker/node` returns all five as a plugin array.
 
 ---
+
+## Implementation
+
+### `src/plugin.ts`
+
+- `getMockerPlugins()` calls `mockerPlugin()` and returns the plugin array to be spread into
+  Vite's plugin config.
+- The `@vitest/mocker/auto-register` alias is pointed at `dist/auto-register.js` directly
+  (bypassing the package exports map, which incorrectly routes `./auto-register` to
+  `dist/register.js` — a file that only exports `registerModuleMocker` but never calls it).
+- The ws-rpc plugin's `load` hook is wrapped to strip `?v=HASH` query params before comparing
+  against `registerPath`. Vite passes module IDs with cache-busting query params; `mockerPlugin`
+  does a strict equality check that fails without this strip.
+- A `transform` hook (enforce:'pre') rewrites relative `vi.mock()` paths to project-root-absolute
+  before `hoistMocksPlugin` runs. Relative paths would be unresolvable server-side because the
+  shim's `import.meta.url` is a virtual URL.
+- The virtual vitest shim sets `globalThis.vi = vi` so that hoisted `vi.mock()` calls can
+  reference `vi` before the `import { vi } from 'vitest'` has executed.
+
+### `src/frame.ts`
+
+- `import '@vitest/mocker/auto-register'` is the first line. This sets
+  `globalThis.__vitest_mocker__` before any test collection, so mocks are in place when
+  `runner.importFile` triggers the test file's static imports.
+
+### `src/node/server.ts`
+
+- The main window HTML injects a passthrough `__vitest_mocker__` stub before the module script
+  so that `dynamicImportPlugin`'s `wrapDynamicImport` calls don't crash in the UI frame (which
+  has no real mocker active).
+
+---
+
+## What works
+
+| Pattern | Status |
+|---|---|
+| `vi.mock('npm-package')` — auto-mock | Works |
+| `vi.mock('npm-package', factory)` — factory mock | Works |
+| `vi.mock('./relative/path')` — relative path | Works (rewritten to absolute by the pre-transform) |
+| `vi.unmock`, `vi.doMock`, `vi.doUnmock` | Works |
+| `vi.mocked(fn).mockReturnValue(...)` etc. | Works (via `@vitest/spy`) |
 
 ## What still won't work
 
-| Approach | Why |
-|---|---|
-| `ModuleMockerServerInterceptor` from `@vitest/mocker` | Uses `rpc("vitest:interceptor:register", ...)` — requires the vitest birpc bridge that jibe doesn't set up |
-| `ModuleMockerMSWInterceptor` from `@vitest/mocker` | Uses a Service Worker for browser-side interception — requires MSW to be installed in the consumer's project |
-
----
-
-## Summary
-
-| Scenario | Before `collectTests` | After `collectTests` |
-|---|---|---|
-| `vi.mock('module')` auto-mock | Not feasible (no pre-import hook) | **Feasible** (~80 lines) |
-| `vi.mock('module', factory)` | Not feasible | Feasible, harder (~150 lines) |
-| Via vitest RPC/MSW infrastructure | Not feasible | Still not feasible |
+`vi.mock` with a factory that uses `vi.importActual()` internally — this requires a server-side
+round-trip that the current WebSocket bridge does support in theory, but hasn't been exercised.

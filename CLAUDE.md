@@ -9,15 +9,16 @@ This is a **Storybook-style component workshop** for React components. The core 
 ## Architecture
 
 **Chosen approach: Vite dev server that interfaces with a vitest instance/server.** Vitest browser mode was tried first (iter 1) but rejected because:
+
 - Vitest has no concept of "render phase" vs "assertion phase" — you'd be fighting its batch-oriented runner
 - Parameter injection has no natural hook point in Vitest's execution model
 - The orchestrator RPC/WebSocket layer is unstable internal API that breaks across Vitest versions
 
-The current approach uses vitest's Vite server for transforms (JSX/TS resolution) and `@vitest/runner` + `@vitest/spy` for in-browser test lifecycle and mock/spy support. The vitest orchestrator (RPC/WebSocket layer) is not used.
+The current approach uses vitest's Vite server for transforms (JSX/TS resolution) and `@vitest/runner` + `@vitest/spy` + `@vitest/mocker` for in-browser test lifecycle, mock/spy support, and module mocking. The vitest orchestrator (RPC/WebSocket layer) is not used.
 
 ### How it works
 
-```
+```text
 Workshop UI  (src/ui/App.tsx, served via src/node/server.ts)
   hosts an <iframe>
     ↓  iframe.src = /frame?file=/src/Button.test.tsx&run=0
@@ -37,6 +38,8 @@ iframe  (src/frame.ts, served at /frame by src/node/server.ts)
 
 **Real spy/mock support:** The virtual shim imports `vi.spyOn`, `vi.fn`, `vi.restoreAllMocks`, etc. from `@vitest/spy` — the same library vitest uses internally. Mocks set up in test bodies work correctly in workshop renders.
 
+**Real module mocking:** `vi.mock()` / `vi.unmock()` / `vi.doMock()` / `vi.doUnmock()` are delegated to `@vitest/mocker`, a standalone package that ships with vitest. `@vitest/mocker` communicates over Vite's built-in HMR WebSocket (`server.ws`) — it has no dependency on vitest's orchestrator or birpc. Both auto-mocks (`vi.mock('id')`) and factory mocks (`vi.mock('id', factory)`) work. See `docs/module-mocking.md` for architecture details.
+
 **Real lifecycle hooks:** `beforeEach`/`afterEach`/`beforeAll`/`afterAll` are re-exported directly from `@vitest/runner`. `describe` is also from `@vitest/runner`, so hook scoping by describe block is correct. `frame.ts` uses `collectTests` to build the suite tree, then `getHooks(suite)` to run the right hooks before/after each variant.
 
 **Clean state between variants:** Selecting a different test sets `iframe.src` to a new URL, triggering a full iframe reload. No manual React cleanup needed.
@@ -46,21 +49,23 @@ iframe  (src/frame.ts, served at /frame by src/node/server.ts)
 ### Key files
 
 | File | Purpose |
-|---|---|
+| --- | --- |
 | `src/cli/cli.ts` | CLI entry — calls `createVitest('test', {watch:true})` then `startJibeServer(vitest)` |
 | `src/node/server.ts` | Standalone Vite server: serves workshop UI + frame endpoint, opens browser |
 | `src/frame.ts` | Iframe runtime — uses `collectTests` to import test file and build suite tree; runs hooks + selected variant |
 | `src/ui/App.tsx` | React workshop UI — iframe host + variant trigger button |
 | `src/ui/main.tsx` | React entry point — mounts `App` into `#root` |
-| `src/plugin.ts` | Vite plugin: virtual `vitest` shim, `@vitest/spy`/`@vitest/runner` aliases, `/__workshop_files__` endpoint |
+| `src/plugin.ts` | Vite plugin: virtual `vitest` shim, `@vitest/spy`/`@vitest/runner`/`@vitest/mocker` aliases, `/__workshop_files__` endpoint, `getMockerPlugins()` |
 | `src/runtime.ts` | `param(key, default)` helper for future parameterized inputs |
 | `src/index.ts` | Package entry — re-exports `param` |
 | `example/frontend/src/Button.tsx` | Example consumer component |
 | `example/frontend/src/Button.test.tsx` | Example test file — unmodified standard Vitest tests |
 | `example/frontend/src/components/ProfileFormPage.tsx` | Example form component with fetch + loading state |
 | `example/frontend/src/components/ProfileFormPage.test.tsx` | Example tests using spies, mocks, and lifecycle hooks |
+| `example/frontend/src/components/WeatherWidget.tsx` | Example component that uses a module-level service dependency |
+| `example/frontend/src/components/WeatherWidget.test.tsx` | Example tests using `vi.mock()` for module mocking — the primary fixture for verifying mock support |
 | `example/frontend/vitest.config.ts` | Standard jsdom Vitest config for `npm test` |
-| `docs/module-mocking.md` | Feasibility analysis for `vi.mock()` support (future work) |
+| `docs/module-mocking.md` | Architecture doc for `vi.mock()` support — implementation approach, gotchas, what works |
 
 ### Jibe CLI server (`src/node/server.ts`)
 
@@ -74,32 +79,37 @@ The middleware serves an HTML shell that loads `src/ui/main.tsx` via `/@fs/<abso
 
 `workshopPlugin()` in `src/plugin.ts` handles iframe test loading and the vitest shim:
 
-- `enforce: 'pre'` — runs before other plugins so the `vitest` alias wins
+- `enforce: 'pre'` — runs before other plugins so the `vitest` alias wins and relative `vi.mock()` paths are rewritten before `hoistMocksPlugin` runs
 - `resolveVitest(pkg)` — resolves pnpm-deduped `@vitest/*` packages via vitest's own require context, since pnpm doesn't hoist them to the root `node_modules`
-- `config()` hook returns aliases for `@vitest/spy` and `@vitest/runner` (both pure JS, browser-compatible) so the virtual shim can import them, plus `optimizeDeps: { exclude: ['vitest'] }` to prevent Vite from pre-bundling the real `vitest` package
+- `config()` hook returns aliases for `@vitest/spy`, `@vitest/runner`, and `@vitest/mocker/auto-register` (the last points directly to `dist/auto-register.js`, bypassing the package exports map which routes to the wrong file), plus `optimizeDeps: { exclude: [...] }` to prevent pre-bundling
+- `transform()` hook rewrites relative `vi.mock('./path')` specifiers to project-root-absolute paths before the hoist transform runs, so the shim can resolve them server-side
 - `resolveId('vitest')` → returns `'\0virtual:workshop-vitest'`
 - `load('\0virtual:workshop-vitest')` → returns the shim source
 - `configureServer` middleware at `/__workshop_files__` — globs for files matching the `include` pattern and returns JSON `{ files: string[] }`
+
+`getMockerPlugins()` in `src/plugin.ts` loads `mockerPlugin()` from `@vitest/mocker/node` and returns it for use in the Vite server config. It also wraps the ws-rpc plugin's `load` hook to strip `?v=HASH` cache-busting query params before the path comparison (a bug in `@vitest/mocker` that prevents it from intercepting `register.js` in a plain Vite server).
 
 ### Virtual vitest shim
 
 The shim is the string constant `VIRTUAL_VITEST_SRC` in `src/plugin.ts`. What each export does:
 
 | Export | Source | Behavior |
-|---|---|---|
+| --- | --- | --- |
 | `test` / `it` | custom | Calls `@vitest/runner`'s `_test` (for suite context) AND pushes to `__workshop_registry__` (for UI) |
 | `describe` | `@vitest/runner` | Real — manages suite context stack for correct hook scoping |
 | `beforeEach` / `afterEach` / `beforeAll` / `afterAll` | `@vitest/runner` | Real — registers hooks on the current suite; `frame.ts` runs them via `getHooks()` |
 | `expect` | custom no-op Proxy | Returns a proxy for any chain; never throws — assertions are silently skipped |
 | `vi.spyOn` / `vi.fn` / `vi.restoreAllMocks` etc. | `@vitest/spy` | Real — mocks and spies work correctly in workshop renders |
 | `vi.useFakeTimers` etc. | no-op | `@sinonjs/fake-timers` not accessible through this pnpm tree |
-| `vi.mock` / `vi.unmock` etc. | no-op | Requires hoist transform + server registry; see `docs/module-mocking.md` |
+| `vi.mock` / `vi.unmock` / `vi.doMock` / `vi.doUnmock` | `@vitest/mocker` | Real — delegated to `@vitest/mocker`; see `docs/module-mocking.md` |
+
+The shim also sets `globalThis.vi = vi` so that `vi.mock()` calls hoisted before imports (by `hoistMocksPlugin`) can reference `vi` before the `import { vi } from 'vitest'` statement has run.
 
 ### Frame runtime (`src/frame.ts`)
 
 The iframe runtime uses `collectTests` from `@vitest/runner` with a minimal runner implementation:
 
-```
+```js
 minimalRunner = {
   config: { root, name, sequence, setupFiles: [], testTimeout, hookTimeout, ... }
   importFile(filepath) → await import(filepath)   // triggers test registration
@@ -107,7 +117,10 @@ minimalRunner = {
 }
 ```
 
+The first line of `frame.ts` is `import '@vitest/mocker/auto-register'`, which sets `globalThis.__vitest_mocker__` via `registerModuleMocker(() => new ModuleMockerServerInterceptor())` before any test collection. This ensures mock registrations are in place when `runner.importFile` triggers the test file's static imports.
+
 After `collectTests`:
+
 - `window.__workshop_registry__` has the flat test list (for the UI)
 - `@vitest/runner`'s internal suite tree has the hook associations
 
@@ -145,4 +158,5 @@ cd example/frontend && npm test
 ## Planned Directory Structure
 
 Inferred from `.gitignore` entries:
+
 - `test/fixtures/` — fixture projects for integration tests; each has its own `node_modules/`, `jibe-dist/`, and `workshop-dist/` (all gitignored)

@@ -1,3 +1,4 @@
+import '@vitest/mocker/auto-register'
 import { collectTests, getHooks } from '@vitest/runner'
 import type { File as VitestFile } from '@vitest/runner'
 

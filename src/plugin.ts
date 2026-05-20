@@ -16,6 +16,15 @@ function resolveVitest(pkg: string): string | null {
 }
 const VITEST_SPY_PATH = resolveVitest('@vitest/spy')
 const VITEST_RUNNER_PATH = resolveVitest('@vitest/runner')
+// The exports map routes '@vitest/mocker/auto-register' → dist/register.js (which only
+// exports the function). We need dist/auto-register.js, which actually calls
+// registerModuleMocker(() => new ModuleMockerServerInterceptor()). Derive it from the
+// package index path to bypass the exports map.
+const _VITEST_MOCKER_INDEX_PATH = resolveVitest('@vitest/mocker')
+const VITEST_MOCKER_AUTO_REGISTER_PATH = _VITEST_MOCKER_INDEX_PATH
+  ? path.join(path.dirname(_VITEST_MOCKER_INDEX_PATH), 'auto-register.js')
+  : null
+const VITEST_MOCKER_NODE_PATH = resolveVitest('@vitest/mocker/node')
 
 const VIRTUAL_ID = 'virtual:workshop-vitest'
 const RESOLVED_ID = '\0' + VIRTUAL_ID
@@ -63,13 +72,40 @@ export const vi = {
   runAllTimersAsync: noop,
   advanceTimersByTime: noop,
   advanceTimersByTimeAsync: noop,
-  // Module mocking requires vitest's hoist transform + server-side registry
-  mock: noop,
-  unmock: noop,
-  doMock: noop,
-  doUnmock: noop,
+  // vi.hoisted runs its callback immediately (hoistMocksPlugin moves it before imports)
+  hoisted: (fn) => fn(),
+  // Delegate to @vitest/mocker's ModuleMocker (set up by @vitest/mocker/auto-register in frame.ts).
+  // import.meta.url here is the shim's virtual URL; relative specifiers are rewritten to absolute
+  // by workshopPlugin's transform before hoistMocksPlugin runs, so they resolve correctly.
+  mock: (id, factory) => globalThis['__vitest_mocker__']?.queueMock(id, import.meta.url, factory),
+  unmock: (id) => globalThis['__vitest_mocker__']?.queueUnmock(id, import.meta.url),
+  doMock: (id, factory) => globalThis['__vitest_mocker__']?.queueMock(id, import.meta.url, factory),
+  doUnmock: (id) => globalThis['__vitest_mocker__']?.queueUnmock(id, import.meta.url),
 }
+
+// hoistMocksPlugin moves vi.mock() calls to before the file's imports. At that hoisted
+// position, vi hasn't been imported yet — so we expose it as a global here.
+globalThis.vi = vi
 `
+
+// Loads @vitest/mocker's Vite plugins (hoist transform, interceptor, automock, dynamic-import wrap).
+// These use Vite's built-in server.ws WebSocket — no vitest orchestrator required.
+// Returns an empty array if @vitest/mocker is not resolvable (e.g. vitest not installed).
+export async function getMockerPlugins(): Promise<Plugin[]> {
+  if (!VITEST_MOCKER_NODE_PATH) return []
+  const mod = await import(VITEST_MOCKER_NODE_PATH) as { mockerPlugin: () => Plugin[] }
+  const plugins = mod.mockerPlugin()
+  // @vitest/mocker's ws-rpc load hook compares id === registerPath, but Vite passes ids with
+  // ?v=HASH query params. Strip the query before delegating so the comparison succeeds.
+  const wsRpc = plugins[0]
+  const originalLoad = wsRpc.load
+  ;(wsRpc as any).load = async function(this: unknown, id: string, ...args: unknown[]) {
+    const fn = typeof originalLoad === 'function' ? originalLoad : (originalLoad as any)?.handler
+    const cleanId = id.includes('?') ? id.slice(0, id.indexOf('?')) : id
+    return fn?.call(this, cleanId, ...args)
+  }
+  return plugins
+}
 
 interface WorkshopPluginOptions {
   include?: string
@@ -85,19 +121,40 @@ export function workshopPlugin(options: WorkshopPluginOptions = {}): Plugin {
 
     config() {
       // Alias pnpm-deduped @vitest/* packages to absolute paths so the virtual shim
-      // can import them. pnpm doesn't hoist these to the root node_modules.
+      // and frame.ts can import them. pnpm doesn't hoist these to the root node_modules.
       const alias: Record<string, string> = {}
       if (VITEST_SPY_PATH) alias['@vitest/spy'] = VITEST_SPY_PATH
       if (VITEST_RUNNER_PATH) alias['@vitest/runner'] = VITEST_RUNNER_PATH
+      if (VITEST_MOCKER_AUTO_REGISTER_PATH) alias['@vitest/mocker/auto-register'] = VITEST_MOCKER_AUTO_REGISTER_PATH
       return {
-        // Prevent Vite from pre-bundling vitest so our resolveId hook intercepts it.
-        optimizeDeps: { exclude: ['vitest'] },
+        // Prevent Vite from pre-bundling these; our resolveId hook intercepts vitest,
+        // and the mocker packages live in the pnpm store, not root node_modules.
+        optimizeDeps: { exclude: ['vitest', '@vitest/mocker/auto-register', '@vitest/mocker/register'] },
         ...(Object.keys(alias).length > 0 && { resolve: { alias } }),
       }
     },
 
     configResolved(config) {
       root = config.root
+    },
+
+    // Rewrite relative vi.mock() IDs to project-root-absolute paths.
+    // Runs before hoistMocksPlugin (enforce:'pre') so the absolute path is what gets hoisted.
+    // This is needed because the shim's vi.mock passes import.meta.url (virtual URL) as the
+    // importer, which makes relative paths unresolvable server-side.
+    transform(code, id) {
+      if (!code.includes('vi.mock(')) return null
+      const dir = path.dirname(id)
+      let changed = false
+      const rewritten = code.replace(
+        /\bvi\.mock\(\s*(['"`])(\.\.?\/[^'"`]+)\1/g,
+        (full, _quote, relPath) => {
+          const abs = '/' + path.relative(root, path.resolve(dir, relPath)).replaceAll(path.sep, '/')
+          changed = true
+          return full.replace(relPath, abs)
+        },
+      )
+      return changed ? { code: rewritten, map: null } : null
     },
 
     resolveId(id) {
