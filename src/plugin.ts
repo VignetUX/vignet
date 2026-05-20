@@ -3,37 +3,41 @@ import { glob } from 'node:fs/promises'
 import path from 'node:path'
 import { createRequire } from 'module'
 
-// @vitest/spy is pure JS and browser-compatible. It's a dependency of vitest but
-// pnpm doesn't hoist it to the root node_modules, so resolve it through vitest's context.
-function resolveVitestSpyPath(): string | null {
+// Resolve a vitest sub-package via vitest's own require context.
+// pnpm doesn't hoist @vitest/* to the root node_modules, so we go through vitest.
+function resolveVitest(pkg: string): string | null {
   try {
     const localRequire = createRequire(import.meta.url)
     const vitestRequire = createRequire(localRequire.resolve('vitest'))
-    return vitestRequire.resolve('@vitest/spy')
+    return vitestRequire.resolve(pkg)
   } catch {
     return null
   }
 }
-const VITEST_SPY_PATH = resolveVitestSpyPath()
+const VITEST_SPY_PATH = resolveVitest('@vitest/spy')
+const VITEST_RUNNER_PATH = resolveVitest('@vitest/runner')
 
 const VIRTUAL_ID = 'virtual:workshop-vitest'
 const RESOLVED_ID = '\0' + VIRTUAL_ID
 
 // Served when any file does `import ... from 'vitest'` in the workshop Vite dev server.
-// test/it capture bodies into window.__workshop_registry__; expect is a no-op proxy.
-// vi is real @vitest/spy so spyOn/fn/restoreAllMocks etc. work in workshop renders.
+// - test/it: push to __workshop_registry__ AND into @vitest/runner's suite context (for hooks)
+// - describe/beforeEach/afterEach/beforeAll/afterAll: real @vitest/runner exports
+// - expect: no-op proxy (assertions must not throw so components can render)
+// - vi: real @vitest/spy so spyOn/fn/restoreAllMocks etc. work
 const VIRTUAL_VITEST_SRC = `
 import { fn, spyOn, restoreAllMocks, clearAllMocks, resetAllMocks, isMockFunction } from '@vitest/spy'
+import { test as _test, it as _it, describe, beforeEach, afterEach, beforeAll, afterAll } from '@vitest/runner'
+export { describe, beforeEach, afterEach, beforeAll, afterAll }
 
 const noop = () => {}
 const noopMatcher = new Proxy(noop, { get: () => noopMatcher, apply: () => noopMatcher })
 
 export function test(name, fn) {
+  _test(name, fn)
   ;(window.__workshop_registry__ = window.__workshop_registry__ || []).push({ name, fn })
 }
 export const it = test
-
-export function describe(_name, fn) { fn() }
 
 export const expect = new Proxy(noop, {
   apply: () => noopMatcher,
@@ -42,11 +46,6 @@ export const expect = new Proxy(noop, {
     return () => noopMatcher
   },
 })
-
-export const beforeEach = noop
-export const afterEach = noop
-export const beforeAll = noop
-export const afterAll = noop
 
 export const vi = {
   fn,
@@ -85,14 +84,15 @@ export function workshopPlugin(options: WorkshopPluginOptions = {}): Plugin {
     enforce: 'pre',
 
     config() {
+      // Alias pnpm-deduped @vitest/* packages to absolute paths so the virtual shim
+      // can import them. pnpm doesn't hoist these to the root node_modules.
+      const alias: Record<string, string> = {}
+      if (VITEST_SPY_PATH) alias['@vitest/spy'] = VITEST_SPY_PATH
+      if (VITEST_RUNNER_PATH) alias['@vitest/runner'] = VITEST_RUNNER_PATH
       return {
         // Prevent Vite from pre-bundling vitest so our resolveId hook intercepts it.
         optimizeDeps: { exclude: ['vitest'] },
-        // Alias @vitest/spy to its absolute path so the virtual shim can import it.
-        // pnpm doesn't hoist @vitest/spy to the root, so we resolve it at plugin load time.
-        ...(VITEST_SPY_PATH && {
-          resolve: { alias: { '@vitest/spy': VITEST_SPY_PATH } },
-        }),
+        ...(Object.keys(alias).length > 0 && { resolve: { alias } }),
       }
     },
 
