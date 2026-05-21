@@ -13,14 +13,14 @@ describe('WeatherWidget', () => {
     vi.resetAllMocks()
   })
 
-  it('shows loading state', () => {
+  it('shows loading state', { meta: { jibe: { name: 'Loading Weather Widget' } } }, () => {
     vi.mocked(getCurrentWeather).mockReturnValue(new Promise(() => {}))
     render(<WeatherWidget city="London" />)
     expect(screen.getByRole('progressbar')).toBeInTheDocument()
     expect(screen.getByText('Fetching weather for London…')).toBeInTheDocument()
   })
 
-  it('shows weather data', async () => {
+  it('shows weather data', { meta: { jibe: { name: 'Weather Widget with data' } } }, async () => {
     vi.mocked(getCurrentWeather).mockResolvedValue({
       city: 'London',
       temperatureC: 18,
