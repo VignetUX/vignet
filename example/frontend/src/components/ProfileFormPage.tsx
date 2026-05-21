@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { TextField, Stack, CircularProgress } from '@mui/material';
-import { Button } from '../Button';
+import { Button } from './Button';
 
 interface ProfileFormData {
   name: string;
