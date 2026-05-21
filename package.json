@@ -9,8 +9,12 @@
     "build": "tsup",
     "dev": "tsup --watch"
   },
+  "types": "./src/types.d.ts",
   "exports": {
-    ".": "./src/index.ts",
+    ".": {
+      "types": "./src/types.d.ts",
+      "default": "./src/index.ts"
+    },
     "./plugin": "./src/plugin.ts",
     "./runtime": "./src/runtime.ts"
   },

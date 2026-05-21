@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 interface Test {
   name: string
+  displayName?: string
   index: number
 }
 
@@ -82,7 +83,7 @@ export function App() {
                     color: selectedRun === test.index ? '#1a73e8' : '#555',
                   }}
                 >
-                  {test.name}
+                  {test.displayName ?? test.name}
                 </div>
               ))}
             </div>

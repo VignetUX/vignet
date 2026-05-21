@@ -37,12 +37,12 @@ describe('ProfileFormPage', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders the header', () => {
+  it('renders the header', { meta: { jibe: { name: 'Header' } } }, () => {
     renderAtRoute()
     expect(screen.getByRole('heading', { name: 'Acme' })).toBeInTheDocument()
   })
 
-  it('shows an empty form when no id is in the url', () => {
+  it('shows an empty form when no id is in the url', { meta: { jibe: { name: 'Empty form' } } }, () => {
     render(<ProfileFormPage />);
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Name')).toHaveValue('')

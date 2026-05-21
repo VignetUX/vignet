@@ -34,13 +34,15 @@ iframe  (src/frame.ts, served at /frame by src/node/server.ts)
     component renders in real DOM
 ```
 
-**Key interception mechanism:** The Vite plugin (`src/plugin.ts`) intercepts `import ... from 'vitest'` and replaces it with a virtual module. `test`/`it` push closures into `window.__workshop_registry__` (for the workshop UI) and also register with `@vitest/runner`'s suite context (for hook scoping). `expect` is a full no-op Proxy so assertions never throw. Test files require zero modification.
+**Key interception mechanism:** The Vite plugin (`src/plugin.ts`) intercepts `import ... from 'vitest'` and replaces it with a virtual module. `test`/`it` push closures into `window.__workshop_registry__` (for the workshop UI) and also register with `@vitest/runner`'s suite context (for hook scoping). `expect` is a full no-op Proxy so assertions never throw. Tests are marked as workshop views by passing `{ meta: { jibe: { name: 'View Name' } } }` as the options argument to `it`/`test`; files with no such calls are excluded from the workshop entirely.
 
 **Real spy/mock support:** The virtual shim imports `vi.spyOn`, `vi.fn`, `vi.restoreAllMocks`, etc. from `@vitest/spy` — the same library vitest uses internally. Mocks set up in test bodies work correctly in workshop renders.
 
 **Real module mocking:** `vi.mock()` / `vi.unmock()` / `vi.doMock()` / `vi.doUnmock()` are delegated to `@vitest/mocker`, a standalone package that ships with vitest. `@vitest/mocker` communicates over Vite's built-in HMR WebSocket (`server.ws`) — it has no dependency on vitest's orchestrator or birpc. Both auto-mocks (`vi.mock('id')`) and factory mocks (`vi.mock('id', factory)`) work. See `docs/module-mocking.md` for architecture details.
 
 **Real lifecycle hooks:** `beforeEach`/`afterEach`/`beforeAll`/`afterAll` are re-exported directly from `@vitest/runner`. `describe` is also from `@vitest/runner`, so hook scoping by describe block is correct. `frame.ts` uses `collectTests` to build the suite tree, then `getHooks(suite)` to run the right hooks before/after each variant.
+
+**Lazy test execution:** `collectTests` imports the test file and registers all test bodies as closures in `__workshop_registry__`, but does not call any of them. Only `registry[N].fn()` — the single selected variant — is ever executed per iframe load. All other test bodies remain dormant. When a file is first selected, `App.tsx` sets `?run=0`, so the first variant renders immediately without requiring an explicit click. `frame.ts` only forwards entries tagged with `jibeviewName` to the parent UI; `?run=N` is also guarded so it only executes if the target entry carries a `jibeviewName`.
 
 **Clean state between variants:** Selecting a different test sets `iframe.src` to a new URL, triggering a full iframe reload. No manual React cleanup needed.
 
@@ -57,6 +59,7 @@ iframe  (src/frame.ts, served at /frame by src/node/server.ts)
 | `src/ui/main.tsx` | React entry point — mounts `App` into `#root` |
 | `src/plugin.ts` | Vite plugin: virtual `vitest` shim, `@vitest/spy`/`@vitest/runner`/`@vitest/mocker` aliases, `/__workshop_files__` endpoint, `getMockerPlugins()` |
 | `src/runtime.ts` | `param(key, default)` helper for future parameterized inputs |
+| `src/types.d.ts` | TypeScript module augmentation — extends Vitest's `TaskMeta` with `jibe?: { name?: string }` |
 | `src/index.ts` | Package entry — re-exports `param` |
 | `example/frontend/src/Button.tsx` | Example consumer component |
 | `example/frontend/src/Button.test.tsx` | Example test file — unmodified standard Vitest tests |
@@ -85,7 +88,7 @@ The middleware serves an HTML shell that loads `src/ui/main.tsx` via `/@fs/<abso
 - `transform()` hook rewrites relative `vi.mock('./path')` specifiers to project-root-absolute paths before the hoist transform runs, so the shim can resolve them server-side
 - `resolveId('vitest')` → returns `'\0virtual:workshop-vitest'`
 - `load('\0virtual:workshop-vitest')` → returns the shim source
-- `configureServer` middleware at `/__workshop_files__` — globs for files matching the `include` pattern and returns JSON `{ files: string[] }`
+- `configureServer` middleware at `/__workshop_files__` — globs for files matching the `include` pattern, filters to those containing `jibe:` (i.e. at least one workshop view), and returns JSON `{ files: string[] }`
 
 `getMockerPlugins()` in `src/plugin.ts` loads `mockerPlugin()` from `@vitest/mocker/node` and returns it for use in the Vite server config. It also wraps the ws-rpc plugin's `load` hook to strip `?v=HASH` cache-busting query params before the path comparison (a bug in `@vitest/mocker` that prevents it from intercepting `register.js` in a plain Vite server).
 
@@ -125,6 +128,30 @@ After `collectTests`:
 - `@vitest/runner`'s internal suite tree has the hook associations
 
 `findSuitePath(collectedFile.tasks, index)` walks the suite tree depth-first to find the suite chain (root → ... → immediate parent) for the test at the given index. `getHooks(suite)` is called on each suite in the chain to run hooks in the correct describe-scoped order.
+
+### Marking workshop views with `meta.jibe.name`
+
+Test files mark specific tests as workshop views using Vitest's standard `it(name, options, fn)` overload with a `meta.jibe.name` option:
+
+```ts
+describe('ProfileFormPage', () => {
+  beforeEach(() => { vi.restoreAllMocks() })
+
+  it('renders the header', { meta: { jibe: { name: 'Header' } } }, () => {
+    renderAtRoute()
+    expect(screen.getByRole('heading', { name: 'Acme' })).toBeInTheDocument()
+  })
+
+  // Regular it() tests still run under `npm test` but are hidden in the workshop
+  it('validates email field', () => { ... })
+})
+```
+
+In workshop mode, the shim's `it` reads `opts.meta?.jibe?.name` and stores it as `jibeviewName` on the registry entry. `frame.ts` filters to only entries with a `jibeviewName` before sending the list to the UI, which displays that name as the sidebar label. In real Vitest (`npm test`), the `meta.jibe` value is stored on `task.meta` by `@vitest/runner` and ignored — tests run normally.
+
+Files with no `jibe:` string are excluded from the sidebar entirely — the `/__workshop_files__` endpoint checks each file for `jibe:` before including it.
+
+**TypeScript setup:** `src/types.d.ts` in `@jibe/workshop` augments Vitest's `TaskMeta` interface with `jibe?: { name?: string }`. Consumer projects activate it by adding `/// <reference types="@jibe/workshop" />` to their test setup file and ensuring that file is in their tsconfig's `include`.
 
 ### `param()` for future prop knobs
 

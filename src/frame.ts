@@ -4,7 +4,7 @@ import type { File as VitestFile } from '@vitest/runner'
 
 declare global {
   interface Window {
-    __workshop_registry__: Array<{ name: string; fn: () => Promise<void> | void }>
+    __workshop_registry__: Array<{ name: string; fn: () => Promise<void> | void; jibeviewName?: string }>
     __workshop_params__: Record<string, unknown>
   }
 }
@@ -66,14 +66,16 @@ function findSuitePath(tasks: VitestFile['tasks'], targetIndex: number): any[] {
   // __workshop_registry__ and @vitest/runner's suite context with hooks.
   const [collectedFile] = await collectTests([file], runner as any)
 
-  const tests = window.__workshop_registry__.map((t, i) => ({ name: t.name, index: i }))
+  const all = window.__workshop_registry__.map((t, i) => ({ name: t.name, displayName: t.jibeviewName, index: i }))
+  const hasViews = all.some(t => t.displayName !== undefined)
+  const tests = hasViews ? all.filter(t => t.displayName !== undefined) : []
   window.parent.postMessage({ type: 'tests_collected', tests }, '*')
 
   if (runParam !== null && collectedFile) {
     const index = parseInt(runParam, 10)
     const entry = window.__workshop_registry__[index]
 
-    if (entry) {
+    if (entry && (!hasViews || entry.jibeviewName !== undefined)) {
       // Suites from outermost describe down to the test's immediate parent.
       const suites = findSuitePath(collectedFile.tasks, index)
       for (const s of suites) for (const h of getHooks(s).beforeAll) await (h as Function)()

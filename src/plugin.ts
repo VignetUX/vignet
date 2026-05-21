@@ -1,5 +1,5 @@
 import type { Plugin, ViteDevServer } from 'vite'
-import { glob } from 'node:fs/promises'
+import { glob, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createRequire } from 'module'
 
@@ -42,9 +42,13 @@ export { describe, beforeEach, afterEach, beforeAll, afterAll }
 const noop = () => {}
 const noopMatcher = new Proxy(noop, { get: () => noopMatcher, apply: () => noopMatcher })
 
-export function test(name, fn) {
-  _test(name, fn)
-  ;(window.__workshop_registry__ = window.__workshop_registry__ || []).push({ name, fn })
+export function test(name, optionsOrFn, fn) {
+  const opts   = typeof optionsOrFn === 'object' && optionsOrFn !== null ? optionsOrFn : {}
+  const testFn = typeof optionsOrFn === 'function' ? optionsOrFn : fn
+  _test(name, testFn)
+  const entry = { name, fn: testFn }
+  if (opts?.meta?.jibe?.name) entry.jibeviewName = opts.meta.jibe.name
+  ;(window.__workshop_registry__ = window.__workshop_registry__ || []).push(entry)
 }
 export const it = test
 
@@ -169,7 +173,10 @@ export function workshopPlugin(options: WorkshopPluginOptions = {}): Plugin {
       server.middlewares.use('/__workshop_files__', async (_req, res) => {
         const files: string[] = []
         for await (const f of glob(include, { cwd: root })) {
-          files.push('/' + f.replaceAll(path.sep, '/'))
+          const content = await readFile(path.join(root, f), 'utf-8')
+          if (content.includes('jibe:')) {
+            files.push('/' + f.replaceAll(path.sep, '/'))
+          }
         }
         res.setHeader('Content-Type', 'application/json')
         res.end(JSON.stringify({ files }))
