@@ -2,7 +2,7 @@ import { test, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { Button } from './Button.js'
 
-test('primary', () => {
+test('primary', { meta: { jibe: { name: 'Primary Button' } } }, () => {
   render(<Button label="Click me" variant="primary" />)
   expect(screen.getByRole('button', { name: 'Click me' })).toBeTruthy()
 })
