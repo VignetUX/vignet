@@ -112,7 +112,7 @@ export async function getMockerPlugins(): Promise<Plugin[]> {
 }
 
 interface WorkshopPluginOptions {
-  include?: string
+  include?: string | string[]
 }
 
 export function workshopPlugin(options: WorkshopPluginOptions = {}): Plugin {

@@ -1,23 +1,49 @@
 import { createServer, type ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'url'
-import { join } from 'path'
+import { join, sep, isAbsolute, relative, resolve as resolvePath } from 'path'
 import { workshopPlugin, getMockerPlugins } from '../plugin.js'
 
 const jibeDir = fileURLToPath(new URL('../', import.meta.url))
 
-export async function startJibeServer(vitest: unknown): Promise<void> {
+export async function startJibeServer(vitest: any): Promise<void> {
+  const allAliases: any[] = vitest?.vite?.config?.resolve?.alias ?? []
+  const consumerAlias = allAliases.filter(a => {
+    if (typeof a.find === 'string') return !a.find.includes('@vite/')
+    // .source preserves backslash-escaping (e.g. @vite\/ ≠ @vite/) so use .test() instead
+    const re = a.find as RegExp
+    return !re.test('@vite/client') && !re.test('@vite/env')
+  })
+  const rawDir: string | undefined = vitest?.config?.dir
+  const rawInclude: string | string[] | undefined = vitest?.config?.include
+
+  // vitest.config.include patterns are relative to vitest.config.dir, not the project root.
+  // Prepend dir so the glob in workshopPlugin resolves correctly from process.cwd().
+  let consumerInclude: string | string[] | undefined
+  if (rawInclude) {
+    if (rawDir) {
+      const relDir = isAbsolute(rawDir)
+        ? relative(process.cwd(), rawDir)
+        : rawDir.replace(/^\.\//, '')
+      const patterns = Array.isArray(rawInclude) ? rawInclude : [rawInclude]
+      consumerInclude = patterns.map(p => join(relDir, p).replaceAll(sep, '/'))
+    } else {
+      consumerInclude = rawInclude
+    }
+  }
+
   const mockerPlugins = await getMockerPlugins()
   const server = await createServer({
     configFile: false,
     // Disables Vite's SPA fallback so that test memoryroutes etc are disabled. Jibe only exposes specific routes.
     appType: 'custom',
     root: process.cwd(),
+    ...(consumerAlias?.length && { resolve: { alias: consumerAlias } }),
     server: {
       open: '/',
       fs: { allow: [process.cwd(), jibeDir] },
     },
-    plugins: [react(), workshopPlugin(), ...mockerPlugins, jibeServerPlugin(vitest)],
+    plugins: [react(), workshopPlugin({ include: consumerInclude }), ...mockerPlugins, jibeServerPlugin(vitest)],
   })
 
   await server.listen()

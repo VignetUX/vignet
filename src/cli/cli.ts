@@ -8,5 +8,10 @@ const consumerRequire = createRequire(resolve(process.cwd(), 'package.json'))
 const vitestNodePath = consumerRequire.resolve('vitest/node')
 const { createVitest } = await import(pathToFileURL(vitestNodePath).href)
 
-const vitest = await createVitest('test', { watch: true })
+const configIndex = process.argv.indexOf('--config')
+const configFile = configIndex !== -1
+  ? resolve(process.cwd(), process.argv[configIndex + 1])
+  : undefined
+
+const vitest = await createVitest('test', { watch: true, ...(configFile && { config: configFile }) })
 await startJibeServer(vitest)
