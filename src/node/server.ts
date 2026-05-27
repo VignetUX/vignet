@@ -1,8 +1,25 @@
 import { createServer, type ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'url'
+import { pathToFileURL } from 'node:url'
 import { join, sep, isAbsolute, relative, resolve as resolvePath } from 'path'
+import { createRequire } from 'module'
 import { workshopPlugin, getMockerPlugins } from '../plugin.js'
+
+// Try to resolve vite-tsconfig-paths from the consumer's project.
+// Many TypeScript projects (Next.js, etc.) declare path aliases only in tsconfig.json and rely
+// on this plugin to make Vite aware of them; those aliases never appear in resolve.alias.
+async function getTsconfigPathsPlugin(): Promise<any[]> {
+  try {
+    const consumerRequire = createRequire(resolvePath(process.cwd(), 'package.json'))
+    const pluginPath = consumerRequire.resolve('vite-tsconfig-paths')
+    const mod = await import(pathToFileURL(pluginPath).href)
+    const factory = mod.default ?? mod
+    return [factory()]
+  } catch {
+    return []
+  }
+}
 
 const jibeDir = fileURLToPath(new URL('../', import.meta.url))
 
@@ -33,6 +50,7 @@ export async function startJibeServer(vitest: any): Promise<void> {
   }
 
   const mockerPlugins = await getMockerPlugins()
+  const tsconfigPathsPlugins = await getTsconfigPathsPlugin()
   const server = await createServer({
     configFile: false,
     // Disables Vite's SPA fallback so that test memoryroutes etc are disabled. Jibe only exposes specific routes.
@@ -43,7 +61,7 @@ export async function startJibeServer(vitest: any): Promise<void> {
       open: '/',
       fs: { allow: [process.cwd(), jibeDir] },
     },
-    plugins: [react(), workshopPlugin({ include: consumerInclude }), ...mockerPlugins, jibeServerPlugin(vitest)],
+    plugins: [react(), workshopPlugin({ include: consumerInclude }), ...tsconfigPathsPlugins, ...mockerPlugins, jibeServerPlugin(vitest)],
   })
 
   await server.listen()

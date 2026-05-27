@@ -99,13 +99,18 @@ export async function getMockerPlugins(): Promise<Plugin[]> {
   if (!VITEST_MOCKER_NODE_PATH) return []
   const mod = await import(VITEST_MOCKER_NODE_PATH) as { mockerPlugin: () => Plugin[] }
   const plugins = mod.mockerPlugin()
-  // @vitest/mocker's ws-rpc load hook compares id === registerPath, but Vite passes ids with
-  // ?v=HASH query params. Strip the query before delegating so the comparison succeeds.
+  // @vitest/mocker's ws-rpc load hook compares id === registerPath, but in a pnpm virtual store
+  // the id Vite passes can differ from registerPath (symlink resolution, ?v=HASH query params,
+  // /@fs/ prefix) so the comparison silently fails. The actual __VITEST_GLOBAL_THIS_ACCESSOR__
+  // replacement is handled by workshopPlugin's transform hook (content-based, no path comparison).
+  // This wrapper strips the query and /@fs prefix as a best-effort assist, but transform is the
+  // reliable path.
   const wsRpc = plugins[0]
   const originalLoad = wsRpc.load
   ;(wsRpc as any).load = async function(this: unknown, id: string, ...args: unknown[]) {
     const fn = typeof originalLoad === 'function' ? originalLoad : (originalLoad as any)?.handler
-    const cleanId = id.includes('?') ? id.slice(0, id.indexOf('?')) : id
+    let cleanId = id.includes('?') ? id.slice(0, id.indexOf('?')) : id
+    if (cleanId.startsWith('/@fs')) cleanId = cleanId.slice(4)
     return fn?.call(this, cleanId, ...args)
   }
   return plugins
@@ -142,11 +147,24 @@ export function workshopPlugin(options: WorkshopPluginOptions = {}): Plugin {
       root = config.root
     },
 
-    // Rewrite relative vi.mock() IDs to project-root-absolute paths.
-    // Runs before hoistMocksPlugin (enforce:'pre') so the absolute path is what gets hoisted.
-    // This is needed because the shim's vi.mock passes import.meta.url (virtual URL) as the
-    // importer, which makes relative paths unresolvable server-side.
     transform(code, id) {
+      // @vitest/mocker's register.js ships with bare __VITEST_GLOBAL_THIS_ACCESSOR__ and
+      // __VITEST_MOCKER_ROOT__ identifiers that must be replaced before the browser executes
+      // the file. The ws-rpc load hook in @vitest/mocker does this via an id === registerPath
+      // comparison, but that comparison fails in pnpm virtual stores due to symlink/path
+      // differences. Content-based detection here is the reliable fallback.
+      if (code.includes('__VITEST_GLOBAL_THIS_ACCESSOR__')) {
+        return {
+          code: code
+            .replace(/__VITEST_GLOBAL_THIS_ACCESSOR__/g, '"__vitest_mocker__"')
+            .replace('__VITEST_MOCKER_ROOT__', JSON.stringify(root)),
+          map: null,
+        }
+      }
+      // Rewrite relative vi.mock() IDs to project-root-absolute paths.
+      // Runs before hoistMocksPlugin (enforce:'pre') so the absolute path is what gets hoisted.
+      // This is needed because the shim's vi.mock passes import.meta.url (virtual URL) as the
+      // importer, which makes relative paths unresolvable server-side.
       if (!code.includes('vi.mock(')) return null
       const dir = path.dirname(id)
       let changed = false
