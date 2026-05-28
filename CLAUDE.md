@@ -85,12 +85,12 @@ The middleware serves an HTML shell that loads `src/ui/main.tsx` via `/@fs/<abso
 - `enforce: 'pre'` — runs before other plugins so the `vitest` alias wins and relative `vi.mock()` paths are rewritten before `hoistMocksPlugin` runs
 - `resolveVitest(pkg)` — resolves pnpm-deduped `@vitest/*` packages via vitest's own require context, since pnpm doesn't hoist them to the root `node_modules`
 - `config()` hook returns aliases for `@vitest/spy`, `@vitest/runner`, and `@vitest/mocker/auto-register` (the last points directly to `dist/auto-register.js`, bypassing the package exports map which routes to the wrong file), plus `optimizeDeps: { exclude: [...] }` to prevent pre-bundling
-- `transform()` hook rewrites relative `vi.mock('./path')` specifiers to project-root-absolute paths before the hoist transform runs, so the shim can resolve them server-side
+- `transform()` hook has two responsibilities: (1) replaces `__VITEST_GLOBAL_THIS_ACCESSOR__` / `__VITEST_MOCKER_ROOT__` bare identifiers in `@vitest/mocker`'s `register.js` (content-based — avoids path-comparison issues); (2) rewrites relative `vi.mock('./path')` specifiers to project-root-absolute paths before the hoist transform runs
 - `resolveId('vitest')` → returns `'\0virtual:workshop-vitest'`
 - `load('\0virtual:workshop-vitest')` → returns the shim source
 - `configureServer` middleware at `/__workshop_files__` — globs for files matching the `include` pattern, filters to those containing `jibe:` (i.e. at least one workshop view), and returns JSON `{ files: string[] }`
 
-`getMockerPlugins()` in `src/plugin.ts` loads `mockerPlugin()` from `@vitest/mocker/node` and returns it for use in the Vite server config. It also wraps the ws-rpc plugin's `load` hook to strip `?v=HASH` cache-busting query params before the path comparison (a bug in `@vitest/mocker` that prevents it from intercepting `register.js` in a plain Vite server).
+`getMockerPlugins()` in `src/plugin.ts` loads `mockerPlugin()` from `@vitest/mocker/node` and returns it for use in the Vite server config. It also wraps the ws-rpc plugin's `load` hook to strip `?v=HASH` cache-busting query params and `/@fs/` prefixes before the internal path comparison. However, the ws-rpc `load` hook does a strict `id === registerPath` string comparison that still silently fails in pnpm virtual stores (symlink resolution differences between `import.meta.url` inside `@vitest/mocker` and the `id` Vite passes to the load hook). The reliable fix for `register.js` transformation is a content-based `transform` hook in `workshopPlugin` that detects the bare `__VITEST_GLOBAL_THIS_ACCESSOR__` identifier and replaces both placeholders directly — no path comparison needed.
 
 ### Virtual vitest shim
 
