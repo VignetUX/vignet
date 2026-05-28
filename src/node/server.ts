@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { join, sep, isAbsolute, relative, resolve as resolvePath } from 'path'
 import { createRequire } from 'module'
 import { workshopPlugin, getMockerPlugins } from '../plugin.js'
+import { frameHtml, workshopHtml } from './templates.js'
 
 // Try to resolve vite-tsconfig-paths from the consumer's project.
 // Many TypeScript projects (Next.js, etc.) declare path aliases only in tsconfig.json and rely
@@ -80,34 +81,13 @@ function jibeServerPlugin(_vitest: unknown) {
     configureServer(server: ViteDevServer) {
       server.middlewares.use(async (req: any, res: any, next: () => void) => {
         if (req.url?.startsWith('/frame')) {
-          const raw = `<!DOCTYPE html>
-<html lang="en">
-  <head><meta charset="UTF-8" /><title>Jibe Frame</title></head>
-  <body><script type="module" src="/@fs${frameEntry}"></script></body>
-</html>`
-          const html = await server.transformIndexHtml('/frame', raw)
+          const html = await server.transformIndexHtml('/frame', frameHtml(frameEntry))
           res.writeHead(200, { 'Content-Type': 'text/html' })
           res.end(html)
           return
         }
         if (req.url !== '/') { next(); return }
-        const raw = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Jibe Workshop</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script>
-      // dynamicImportPlugin wraps all import() calls with __vitest_mocker__.wrapDynamicImport.
-      // The mocker is only active in the test iframe, so provide a passthrough here.
-      if (!window["__vitest_mocker__"]) window["__vitest_mocker__"] = { wrapDynamicImport: fn => fn() };
-    </script>
-    <script type="module" src="/@fs${mainEntry}"></script>
-  </body>
-</html>`
-        const html = await server.transformIndexHtml('/', raw)
+        const html = await server.transformIndexHtml('/', workshopHtml(mainEntry))
         res.writeHead(200, { 'Content-Type': 'text/html' })
         res.end(html)
       })
