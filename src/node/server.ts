@@ -24,13 +24,7 @@ async function getTsconfigPathsPlugin(): Promise<any[]> {
 const jibeDir = fileURLToPath(new URL('../', import.meta.url))
 
 export async function startJibeServer(vitest: any): Promise<void> {
-  const allAliases: any[] = vitest?.vite?.config?.resolve?.alias ?? []
-  const consumerAlias = allAliases.filter(a => {
-    if (typeof a.find === 'string') return !a.find.includes('@vite/')
-    // .source preserves backslash-escaping (e.g. @vite\/ ≠ @vite/) so use .test() instead
-    const re = a.find as RegExp
-    return !re.test('@vite/client') && !re.test('@vite/env')
-  })
+  const consumerAlias: any[] = vitest?.vite?.config?.resolve?.alias ?? []
   const rawDir: string | undefined = vitest?.config?.dir
   const rawInclude: string | string[] | undefined = vitest?.config?.include
 
