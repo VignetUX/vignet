@@ -29,6 +29,77 @@ const VITEST_MOCKER_NODE_PATH = resolveVitest('@vitest/mocker/node')
 const VIRTUAL_ID = 'virtual:workshop-vitest'
 const RESOLVED_ID = '\0' + VIRTUAL_ID
 
+// Used in static builds (workshopPlugin({ buildMode: true })). Captures hooks per-test at
+// registration time so the pre-built bundle is self-contained: no @vitest/runner needed at runtime.
+// describe() pushes/pops a hook frame; test() snapshots the full chain into the registry entry.
+const VIRTUAL_VITEST_STATIC_SRC = `
+import { fn, spyOn, restoreAllMocks, clearAllMocks, resetAllMocks, isMockFunction } from '@vitest/spy'
+
+const noop = () => {}
+const noopMatcher = new Proxy(noop, { get: () => noopMatcher, apply: () => noopMatcher })
+
+const hookStack = [{ beforeAll: [], beforeEach: [], afterEach: [], afterAll: [] }]
+
+export function describe(_name, fn) {
+  hookStack.push({ beforeAll: [], beforeEach: [], afterEach: [], afterAll: [] })
+  fn()
+  hookStack.pop()
+}
+
+export const beforeEach = (fn) => { hookStack.at(-1).beforeEach.push(fn) }
+export const afterEach  = (fn) => { hookStack.at(-1).afterEach.push(fn) }
+export const beforeAll  = (fn) => { hookStack.at(-1).beforeAll.push(fn) }
+export const afterAll   = (fn) => { hookStack.at(-1).afterAll.push(fn) }
+
+export function test(name, optionsOrFn, fn) {
+  const opts   = typeof optionsOrFn === 'object' && optionsOrFn !== null ? optionsOrFn : {}
+  const testFn = typeof optionsOrFn === 'function' ? optionsOrFn : fn
+  const hooks = {
+    beforeAll:  hookStack.flatMap(s => s.beforeAll),
+    beforeEach: hookStack.flatMap(s => s.beforeEach),
+    afterEach:  [...hookStack].reverse().flatMap(s => s.afterEach),
+    afterAll:   [...hookStack].reverse().flatMap(s => s.afterAll),
+  }
+  const entry = { name, fn: testFn, hooks }
+  if (opts?.meta?.jibe?.name) entry.jibeviewName = opts.meta.jibe.name
+  ;(window.__workshop_registry__ = window.__workshop_registry__ || []).push(entry)
+}
+export const it = test
+
+export const expect = new Proxy(noop, {
+  apply: () => noopMatcher,
+  get(_, prop) {
+    if (prop === 'extend' || prop === 'soft' || prop === 'poll') return noop
+    return () => noopMatcher
+  },
+})
+
+export const vi = {
+  fn,
+  spyOn,
+  restoreAllMocks,
+  clearAllMocks,
+  resetAllMocks,
+  isMockFunction,
+  mocked: (f) => f,
+  useFakeTimers: noop,
+  useRealTimers: noop,
+  setSystemTime: noop,
+  runAllTimers: noop,
+  runAllTimersAsync: noop,
+  advanceTimersByTime: noop,
+  advanceTimersByTimeAsync: noop,
+  hoisted: (fn) => fn(),
+  // In static builds vi.mock() calls are removed by buildMockPlugin; these are no-ops for safety.
+  mock: noop,
+  unmock: noop,
+  doMock: noop,
+  doUnmock: noop,
+}
+
+globalThis.vi = vi
+`
+
 // Served when any file does `import ... from 'vitest'` in the workshop Vite dev server.
 // - test/it: push to __workshop_registry__ AND into @vitest/runner's suite context (for hooks)
 // - describe/beforeEach/afterEach/beforeAll/afterAll: real @vitest/runner exports
@@ -92,6 +163,14 @@ export const vi = {
 globalThis.vi = vi
 `
 
+// Returns only the hoist transform plugin from @vitest/mocker (used in build mode).
+// The other mocker plugins require a running Vite server and are dev-mode only.
+export async function getHoistMocksPlugin(): Promise<Plugin | null> {
+  if (!VITEST_MOCKER_NODE_PATH) return null
+  const mod = await import(VITEST_MOCKER_NODE_PATH) as { hoistMocksPlugin: () => Plugin }
+  return mod.hoistMocksPlugin()
+}
+
 // Loads @vitest/mocker's Vite plugins (hoist transform, interceptor, automock, dynamic-import wrap).
 // These use Vite's built-in server.ws WebSocket — no vitest orchestrator required.
 // Returns an empty array if @vitest/mocker is not resolvable (e.g. vitest not installed).
@@ -116,12 +195,29 @@ export async function getMockerPlugins(): Promise<Plugin[]> {
   return plugins
 }
 
+// Discovers test files for the workshop — same glob + jibe: filter used in both dev and build modes.
+export async function discoverWorkshopFiles(root: string, include: string | string[]): Promise<string[]> {
+  const patterns = Array.isArray(include) ? include : [include]
+  const files: string[] = []
+  for (const pattern of patterns) {
+    for await (const f of glob(pattern, { cwd: root })) {
+      const content = await readFile(path.join(root, f), 'utf-8')
+      if (content.includes('jibe:')) {
+        files.push(path.join(root, f))
+      }
+    }
+  }
+  return files
+}
+
 interface WorkshopPluginOptions {
   include?: string | string[]
+  buildMode?: boolean
 }
 
 export function workshopPlugin(options: WorkshopPluginOptions = {}): Plugin {
   const include = options.include ?? 'src/**/*.test.{ts,tsx}'
+  const buildMode = options.buildMode ?? false
   let root: string
 
   return {
@@ -184,18 +280,14 @@ export function workshopPlugin(options: WorkshopPluginOptions = {}): Plugin {
     },
 
     load(id) {
-      if (id === RESOLVED_ID) return VIRTUAL_VITEST_SRC
+      if (id === RESOLVED_ID) return buildMode ? VIRTUAL_VITEST_STATIC_SRC : VIRTUAL_VITEST_SRC
     },
 
     configureServer(server: ViteDevServer) {
+      if (buildMode) return
       server.middlewares.use('/__workshop_files__', async (_req, res) => {
-        const files: string[] = []
-        for await (const f of glob(include, { cwd: root })) {
-          const content = await readFile(path.join(root, f), 'utf-8')
-          if (content.includes('jibe:')) {
-            files.push('/' + f.replaceAll(path.sep, '/'))
-          }
-        }
+        const discovered = await discoverWorkshopFiles(root, include)
+        const files = discovered.map(f => '/' + path.relative(root, f).replaceAll(path.sep, '/'))
         res.setHeader('Content-Type', 'application/json')
         res.end(JSON.stringify({ files }))
       })
