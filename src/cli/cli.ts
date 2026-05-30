@@ -1,17 +1,46 @@
 import { createRequire } from 'module'
 import { pathToFileURL } from 'url'
 import { resolve } from 'path'
-import { startJibeServer } from '../node/server.js'
+import cac from 'cac'
+import { buildWorkshop } from '../node/build.js'
 
-// Resolve vitest from the consumer project so workers find their own deps (e.g. jsdom)
-const consumerRequire = createRequire(resolve(process.cwd(), 'package.json'))
-const vitestNodePath = consumerRequire.resolve('vitest/node')
-const { createVitest } = await import(pathToFileURL(vitestNodePath).href)
+const cli = cac('jibe')
 
-const configIndex = process.argv.indexOf('--config')
-const configFile = configIndex !== -1
-  ? resolve(process.cwd(), process.argv[configIndex + 1])
-  : undefined
+cli
+  .command('build', 'Build a static deployable workshop')
+  .option('--out <dir>', 'Output directory', { default: 'workshop-dist' })
+  .action(async (options: { out: string }) => {
+    await buildWorkshop(process.cwd(), options.out)
+  })
 
-const vitest = await createVitest('test', { watch: true, ...(configFile && { config: configFile }) })
-await startJibeServer(vitest)
+cli
+  .command('dev', 'Start the workshop dev server')
+  .option('--config <file>', 'Path to vitest config file')
+  .action(async (options: { config?: string }) => {
+    await startDevServer(options.config)
+  })
+
+// Default command (bare `jibe` with no subcommand) starts the dev server
+cli
+  .command('', 'Start the workshop dev server')
+  .option('--config <file>', 'Path to vitest config file')
+  .action(async (options: { config?: string }) => {
+    await startDevServer(options.config)
+  })
+
+cli.help()
+cli.version('0.0.1')
+cli.parse()
+
+async function startDevServer(configFile?: string): Promise<void> {
+  const { startJibeServer } = await import('../node/server.js')
+
+  // Resolve vitest from the consumer project so workers find their own deps (e.g. jsdom)
+  const consumerRequire = createRequire(resolve(process.cwd(), 'package.json'))
+  const vitestNodePath = consumerRequire.resolve('vitest/node')
+  const { createVitest } = await import(pathToFileURL(vitestNodePath).href)
+
+  const resolvedConfig = configFile ? resolve(process.cwd(), configFile) : undefined
+  const vitest = await createVitest('test', { watch: true, ...(resolvedConfig && { config: resolvedConfig }) })
+  await startJibeServer(vitest)
+}

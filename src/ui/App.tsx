@@ -1,26 +1,48 @@
 import { useEffect, useRef, useState } from 'react'
 
+declare const __JIBE_BUILD_MODE__: boolean | undefined
+
 interface Test {
   name: string
   displayName?: string
   index: number
 }
 
+interface ManifestEntry {
+  path: string
+  bundle: string
+  views: string[]
+}
+
 function fileLabel(filePath: string): string {
   return filePath.replace(/.*\//, '').replace(/\.test\.[tj]sx?$/, '')
 }
 
+const isBuildMode = typeof __JIBE_BUILD_MODE__ !== 'undefined' && __JIBE_BUILD_MODE__
+
 export function App() {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [files, setFiles] = useState<string[]>([])
+  const [bundleMap, setBundleMap] = useState<Record<string, string>>({})
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [tests, setTests] = useState<Test[]>([])
   const [selectedRun, setSelectedRun] = useState<number | null>(null)
 
   useEffect(() => {
-    fetch('/__workshop_files__')
-      .then(r => r.json())
-      .then(({ files }: { files: string[] }) => setFiles(files))
+    if (isBuildMode) {
+      fetch('./manifest.json')
+        .then(r => r.json())
+        .then(({ files: entries }: { files: ManifestEntry[] }) => {
+          const map: Record<string, string> = {}
+          for (const e of entries) map[e.path] = e.bundle
+          setFiles(entries.map(e => e.path))
+          setBundleMap(map)
+        })
+    } else {
+      fetch('/__workshop_files__')
+        .then(r => r.json())
+        .then(({ files }: { files: string[] }) => setFiles(files))
+    }
   }, [])
 
   useEffect(() => {
@@ -33,19 +55,28 @@ export function App() {
     return () => window.removeEventListener('message', handler)
   }, [])
 
+  function frameUrl(file: string, run: number): string {
+    if (isBuildMode) {
+      const bundle = bundleMap[file]
+      // Params go in the hash so they survive clean-URL redirects (frame.html → frame).
+      return `./frame.html#bundle=${encodeURIComponent(bundle)}&run=${run}`
+    }
+    return `/frame?file=${encodeURIComponent(file)}&run=${run}`
+  }
+
   function selectFile(file: string) {
     setSelectedFile(file)
     setTests([])
     setSelectedRun(0)
     if (iframeRef.current) {
-      iframeRef.current.src = `/frame?file=${encodeURIComponent(file)}&run=0`
+      iframeRef.current.src = frameUrl(file, 0)
     }
   }
 
   function selectTest(index: number) {
     setSelectedRun(index)
     if (iframeRef.current && selectedFile) {
-      iframeRef.current.src = `/frame?file=${encodeURIComponent(selectedFile)}&run=${index}`
+      iframeRef.current.src = frameUrl(selectedFile, index)
     }
   }
 

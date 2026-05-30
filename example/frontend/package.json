@@ -6,7 +6,8 @@
         "dev": "vite",
         "build": "tsc -b && vite build",
         "test": "vitest",
-        "jibe": "jibe"
+        "jibe": "jibe",
+        "jibe:build": "jibe build"
     },
     "dependencies": {
         "@emotion/react": "^11.14.0",

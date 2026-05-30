@@ -39,3 +39,10 @@ describe('ProfileFormPage', () => {
 The jibe server only exposes two routes: `/` (workshop UI) and `/frame` (the test iframe). It sets `appType: 'custom'` in `createServer()`, which disables Vite's SPA fallback entirely. Any other path returns a 404 rather than silently serving the consumer app's `index.html`.
 
 Components that use `useParams()` or other React Router hooks need a router context to render. Test files should wrap such components in a `MemoryRouter` (as shown in `ProfileFormPage.test.tsx`). This creates an isolated router context inside the iframe without touching real browser navigation, and is the correct pattern for workshop-previewing any router-dependent component.
+
+## Building example frontend
+
+In `example/frontend`:
+
+- Build static output: `pnpm jibe:build`
+- Then serve it: `npx serve workshop-dist`

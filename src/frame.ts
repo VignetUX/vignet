@@ -4,7 +4,17 @@ import type { File as VitestFile } from '@vitest/runner'
 
 declare global {
   interface Window {
-    __workshop_registry__: Array<{ name: string; fn: () => Promise<void> | void; jibeviewName?: string }>
+    __workshop_registry__: Array<{
+      name: string
+      fn: () => Promise<void> | void
+      jibeviewName?: string
+      hooks?: {
+        beforeAll: Array<() => Promise<void> | void>
+        beforeEach: Array<() => Promise<void> | void>
+        afterEach: Array<() => Promise<void> | void>
+        afterAll: Array<() => Promise<void> | void>
+      }
+    }>
     __workshop_params__: Record<string, unknown>
   }
 }

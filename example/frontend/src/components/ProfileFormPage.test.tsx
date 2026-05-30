@@ -56,7 +56,7 @@ describe('ProfileFormPage', () => {
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
   })
 
-  it('pre-fills the form with data returned from the backend', async () => {
+  it('pre-fills the form with data returned from the backend', { meta: { jibe: { name: 'Pre-filled form' } } }, async () => {
     mockFetch(true, SAMPLE_DATA)
     renderAtRoute('123')
     await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument())
