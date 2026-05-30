@@ -1,6 +1,7 @@
 import '@vitest/mocker/auto-register'
 import { collectTests, getHooks } from '@vitest/runner'
 import type { File as VitestFile } from '@vitest/runner'
+import type { ParamSchemaEntry } from './runtime'
 
 declare global {
   interface Window {
@@ -16,15 +17,29 @@ declare global {
       }
     }>
     __workshop_params__: Record<string, unknown>
+    __workshop_param_schema__: ParamSchemaEntry[]
   }
 }
 
 window.__workshop_registry__ = []
 window.__workshop_params__ = {}
+window.__workshop_param_schema__ = []
 
 const params = new URLSearchParams(location.search)
 const file = params.get('file')
 const runParam = params.get('run')
+
+// Populate __workshop_params__ from p.* query params. URL encoding: JSON.stringify + encodeURIComponent.
+// URLSearchParams already decodes percent-encoding, so we just JSON.parse the value.
+for (const [key, value] of params.entries()) {
+  if (key.startsWith('p.')) {
+    try {
+      window.__workshop_params__[key.slice(2)] = JSON.parse(value)
+    } catch {
+      window.__workshop_params__[key.slice(2)] = value
+    }
+  }
+}
 
 if (!file) {
   throw new Error('Workshop frame: missing ?file= param')
@@ -93,6 +108,9 @@ function findSuitePath(tasks: VitestFile['tasks'], targetIndex: number): any[] {
       await entry.fn()
       for (const s of [...suites].reverse()) for (const h of getHooks(s).afterEach) await (h as Function)()
       for (const s of [...suites].reverse()) for (const h of getHooks(s).afterAll) await (h as Function)()
+
+      // Send schema after full execution so both file-level and test-body param() calls are captured.
+      window.parent.postMessage({ type: 'param_schema', schema: window.__workshop_param_schema__ }, '*')
     }
   }
 })()
