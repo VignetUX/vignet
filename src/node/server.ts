@@ -32,10 +32,13 @@ export async function startJibeServer(vitest: any): Promise<void> {
   // Vite 6's clientInjectionsPlugin then fails its id === normalizedEnvEntry path check
   // and all __DEFINES__, __HMR_CONFIG_NAME__, etc. placeholders are left unreplaced.
   // Strip any @vite/ aliases so jibe's Vite 6 keeps control of its own client modules.
+  // Note: the aliases are regex-based (/^\/?@vite\/env/) so we must test() them rather
+  // than inspect .source, since the escaped \/ does not contain the literal substring @vite/.
+  const VITE_CLIENT_IDS = ['@vite/env', '@vite/client']
   const consumerAlias: any[] = (vitest?.vite?.config?.resolve?.alias ?? []).filter((a: any) => {
     const find = a?.find ?? a
-    const findStr = find instanceof RegExp ? find.source : String(find)
-    return !findStr.includes('@vite/')
+    if (find instanceof RegExp) return !VITE_CLIENT_IDS.some(id => find.test(id))
+    return !VITE_CLIENT_IDS.some(id => String(find).startsWith(id))
   })
   const rawDir: string | undefined = vitest?.config?.dir
   const rawInclude: string | string[] | undefined = vitest?.config?.include
