@@ -25,7 +25,18 @@ async function getTsconfigPathsPlugin(): Promise<any[]> {
 const jibeDir = fileURLToPath(new URL('../', import.meta.url))
 
 export async function startJibeServer(vitest: any): Promise<void> {
-  const consumerAlias: any[] = vitest?.vite?.config?.resolve?.alias ?? []
+  // vitest.vite.config.resolve.alias is the fully-resolved Vite config, which already
+  // includes Vite's internal clientAlias entries mapping @vite/env and @vite/client to
+  // the consumer's Vite installation. Forwarding those overrides jibe's own Vite 6
+  // clientAlias, causing Vite 6 to serve the consumer's Vite files instead of its own.
+  // Vite 6's clientInjectionsPlugin then fails its id === normalizedEnvEntry path check
+  // and all __DEFINES__, __HMR_CONFIG_NAME__, etc. placeholders are left unreplaced.
+  // Strip any @vite/ aliases so jibe's Vite 6 keeps control of its own client modules.
+  const consumerAlias: any[] = (vitest?.vite?.config?.resolve?.alias ?? []).filter((a: any) => {
+    const find = a?.find ?? a
+    const findStr = find instanceof RegExp ? find.source : String(find)
+    return !findStr.includes('@vite/')
+  })
   const rawDir: string | undefined = vitest?.config?.dir
   const rawInclude: string | string[] | undefined = vitest?.config?.include
 
