@@ -5,6 +5,7 @@
   "bin": {
     "jibe": "./cli.mjs"
   },
+  "files": ["cli.mjs", "dist", "src"],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"

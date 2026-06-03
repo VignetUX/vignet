@@ -44,6 +44,9 @@ export async function startJibeServer(vitest: any): Promise<void> {
     }
   }
 
+  const mainEntry = join(jibeDir, 'src/ui/main.tsx')
+  const frameEntry = join(jibeDir, 'src/frame.ts')
+
   const mockerPlugins = await getMockerPlugins()
   const tsconfigPathsPlugins = await getTsconfigPathsPlugin()
   const server = await createServer({
@@ -56,7 +59,15 @@ export async function startJibeServer(vitest: any): Promise<void> {
       open: '/',
       fs: { allow: [process.cwd(), jibeDir] },
     },
-    plugins: [react(), workshopPlugin({ include: consumerInclude }), ...tsconfigPathsPlugins, ...mockerPlugins, jibeServerPlugin(vitest)],
+    // main.tsx and frame.ts are served via /@fs/ from outside the consumer's Vite root,
+    // so Vite's dep scanner never crawls them. Without entries, CJS packages they import
+    // (e.g. react-dom/client) are only discovered lazily on the first browser request —
+    // too late to pre-bundle before the browser loads, causing a fatal SyntaxError on
+    // the consumer's first run. entries tells Vite to scan these files upfront at startup.
+    optimizeDeps: {
+      entries: [mainEntry, frameEntry],
+    },
+    plugins: [react(), workshopPlugin({ include: consumerInclude }), ...tsconfigPathsPlugins, ...mockerPlugins, jibeServerPlugin(mainEntry, frameEntry, vitest)],
   })
 
   await server.listen()
@@ -73,9 +84,7 @@ export async function startJibeServer(vitest: any): Promise<void> {
  * This is the same pattern Vitest uses in its browser plugin
  * (`packages/browser/src/node/plugin.ts`).
  */
-function jibeServerPlugin(_vitest: unknown) {
-  const mainEntry = join(jibeDir, 'src/ui/main.tsx')
-  const frameEntry = join(jibeDir, 'src/frame.ts')
+function jibeServerPlugin(mainEntry: string, frameEntry: string, _vitest: unknown) {
   return {
     name: 'jibe:server',
     configureServer(server: ViteDevServer) {
