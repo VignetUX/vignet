@@ -5,13 +5,23 @@ import { createRequire } from 'module'
 
 // Resolve a vitest sub-package via vitest's own require context.
 // pnpm doesn't hoist @vitest/* to the root node_modules, so we go through vitest.
+// When jibe runs inside a consumer project, import.meta.url points to jibe's dist/
+// and vitest is not in jibe's own node_modules (it's a peer dep), so the first attempt
+// returns null. The fallback resolves vitest from process.cwd() (the consumer's project
+// root) so aliases still point to the correct version vitest uses internally.
 function resolveVitest(pkg: string): string | null {
   try {
     const localRequire = createRequire(import.meta.url)
     const vitestRequire = createRequire(localRequire.resolve('vitest'))
     return vitestRequire.resolve(pkg)
   } catch {
-    return null
+    try {
+      const consumerRequire = createRequire(path.resolve(process.cwd(), 'package.json'))
+      const vitestRequire = createRequire(consumerRequire.resolve('vitest'))
+      return vitestRequire.resolve(pkg)
+    } catch {
+      return null
+    }
   }
 }
 const VITEST_SPY_PATH = resolveVitest('@vitest/spy')
@@ -200,7 +210,11 @@ export async function discoverWorkshopFiles(root: string, include: string | stri
   const patterns = Array.isArray(include) ? include : [include]
   const files: string[] = []
   for (const pattern of patterns) {
-    for await (const f of glob(pattern, { cwd: root })) {
+    // Exclude node_modules explicitly: Yarn 1 installs file: dependencies as symlinks to
+    // the entire source tree, so jibe's own example/ test files end up accessible under
+    // node_modules/@jibe/workshop/ and would otherwise appear in the consumer's sidebar.
+    // The package.json "files" field prevents this for npm/pnpm/Yarn Berry but not Yarn 1.
+    for await (const f of glob(pattern, { cwd: root, exclude: (f) => f.includes('node_modules') })) {
       const content = await readFile(path.join(root, f), 'utf-8')
       if (content.includes('jibe:')) {
         files.push(path.join(root, f))

@@ -1,31 +1,29 @@
-import { createServer, type ViteDevServer } from 'vite'
-import react from '@vitejs/plugin-react'
+import { createServer, loadConfigFromFile, type ViteDevServer } from 'vite'
 import { fileURLToPath } from 'url'
-import { pathToFileURL } from 'node:url'
-import { join, sep, isAbsolute, relative, resolve as resolvePath } from 'path'
-import { createRequire } from 'module'
+import { join, sep, isAbsolute, relative } from 'path'
 import { workshopPlugin, getMockerPlugins } from '../plugin.js'
 import { frameHtml, workshopHtml } from './templates.js'
 
-// Try to resolve vite-tsconfig-paths from the consumer's project.
-// Many TypeScript projects (Next.js, etc.) declare path aliases only in tsconfig.json and rely
-// on this plugin to make Vite aware of them; those aliases never appear in resolve.alias.
-async function getTsconfigPathsPlugin(): Promise<any[]> {
+const jibeDir = fileURLToPath(new URL('../', import.meta.url))
+
+// Load the consumer's vite.config.ts and return only the parts that are safe to forward:
+// plugins (e.g. vite-tsconfig-paths, custom resolvers) and resolve config (aliases).
+// We deliberately do NOT forward server, base, appType, build, etc. — those settings
+// control how the consumer's app is served and would break jibe's own server if inherited.
+async function loadConsumerPluginsAndResolve(root: string): Promise<{ plugins: any[]; resolve: any }> {
   try {
-    const consumerRequire = createRequire(resolvePath(process.cwd(), 'package.json'))
-    const pluginPath = consumerRequire.resolve('vite-tsconfig-paths')
-    const mod = await import(pathToFileURL(pluginPath).href)
-    const factory = mod.default ?? mod
-    return [factory()]
+    const result = await loadConfigFromFile({ command: 'serve', mode: 'development' }, undefined, root)
+    return {
+      // Flatten in case any plugin entry is itself an array (Vite allows nested plugin arrays)
+      plugins: (result?.config?.plugins ?? []).flat().filter(Boolean),
+      resolve: result?.config?.resolve ?? {},
+    }
   } catch {
-    return []
+    return { plugins: [], resolve: {} }
   }
 }
 
-const jibeDir = fileURLToPath(new URL('../', import.meta.url))
-
 export async function startJibeServer(vitest: any): Promise<void> {
-  const consumerAlias: any[] = vitest?.vite?.config?.resolve?.alias ?? []
   const rawDir: string | undefined = vitest?.config?.dir
   const rawInclude: string | string[] | undefined = vitest?.config?.include
 
@@ -44,19 +42,36 @@ export async function startJibeServer(vitest: any): Promise<void> {
     }
   }
 
+  const mainEntry = join(jibeDir, 'src/ui/main.tsx')
+  const frameEntry = join(jibeDir, 'src/frame.ts')
+
   const mockerPlugins = await getMockerPlugins()
-  const tsconfigPathsPlugins = await getTsconfigPathsPlugin()
+  const { plugins: consumerPlugins, resolve: consumerResolve } = await loadConsumerPluginsAndResolve(process.cwd())
+
   const server = await createServer({
     configFile: false,
-    // Disables Vite's SPA fallback so that test memoryroutes etc are disabled. Jibe only exposes specific routes.
+    // Disables Vite's SPA fallback — jibe controls all routes via jibeServerPlugin.
     appType: 'custom',
     root: process.cwd(),
-    ...(consumerAlias?.length && { resolve: { alias: consumerAlias } }),
+    // Forward only resolve config from the consumer (aliases, mainFields, etc.).
+    // Plugin-provided aliases (e.g. vite-tsconfig-paths) come via consumerPlugins below.
+    ...(Object.keys(consumerResolve).length && { resolve: consumerResolve }),
     server: {
       open: '/',
+      // jibeDir must be allowed so /@fs/ can serve main.tsx and frame.ts from jibe's src/
       fs: { allow: [process.cwd(), jibeDir] },
     },
-    plugins: [react(), workshopPlugin({ include: consumerInclude }), ...tsconfigPathsPlugins, ...mockerPlugins, jibeServerPlugin(vitest)],
+    // main.tsx and frame.ts are served via /@fs/ from outside the consumer's Vite root,
+    // so Vite's dep scanner never crawls them. Without entries, CJS packages they import
+    // (e.g. react-dom/client) are only discovered lazily on the first browser request —
+    // too late to pre-bundle before the browser loads, causing a fatal SyntaxError on
+    // the consumer's first run. entries tells Vite to scan these files upfront at startup.
+    optimizeDeps: {
+      entries: [mainEntry, frameEntry],
+    },
+    // consumerPlugins first so their resolveId/transform hooks run before jibe's shim.
+    // This ensures vite-tsconfig-paths and similar plugins resolve imports correctly.
+    plugins: [...consumerPlugins, workshopPlugin({ include: consumerInclude }), ...mockerPlugins, jibeServerPlugin(mainEntry, frameEntry, vitest)],
   })
 
   await server.listen()
@@ -73,9 +88,7 @@ export async function startJibeServer(vitest: any): Promise<void> {
  * This is the same pattern Vitest uses in its browser plugin
  * (`packages/browser/src/node/plugin.ts`).
  */
-function jibeServerPlugin(_vitest: unknown) {
-  const mainEntry = join(jibeDir, 'src/ui/main.tsx')
-  const frameEntry = join(jibeDir, 'src/frame.ts')
+function jibeServerPlugin(mainEntry: string, frameEntry: string, _vitest: unknown) {
   return {
     name: 'jibe:server',
     configureServer(server: ViteDevServer) {

@@ -72,18 +72,20 @@ iframe  (src/frame.ts, served at /frame by src/node/server.ts)
 
 ### Jibe CLI server (`src/node/server.ts`)
 
-`jibe` is a **standalone CLI**, not a consumer-facing Vite plugin. Like Vitest, it creates its own Vite server via `createServer()` with `configFile: false` (consumer's `vite.config.ts` is intentionally ignored). Consumers never touch their Vite config.
+`jibe` is a **standalone CLI**, not a consumer-facing Vite plugin. `vite` is a peer dependency — jibe uses the consumer's installed Vite, not a bundled copy. `startJibeServer()` calls `createServer()` with `configFile: false` so the consumer's `vite.config.ts` is **not** auto-loaded — the consumer's `server`, `base`, `appType`, and `build` settings would break jibe's own server if inherited. Instead, `loadConsumerPluginsAndResolve()` calls `loadConfigFromFile()` explicitly and extracts **only** the consumer's `plugins` and `resolve` config. Consumer plugins (`vite-tsconfig-paths`, custom resolvers, etc.) are prepended to jibe's plugin list so their `resolveId`/`transform` hooks run and all aliases work. Consumers never need to modify their Vite config.
 
 `startJibeServer()` uses an internal plugin to register its HTTP middleware. This plugin wrapper is required for correct middleware ordering: by the time `createServer()` returns, Vite has already registered its internal middleware (including the SPA HTML fallback). A plugin's `configureServer` hook runs *before* that registration, so jibe's middleware intercepts `/` first. This is the same pattern Vitest uses in `packages/browser/src/node/plugin.ts`.
 
 The middleware serves an HTML shell that loads `src/ui/main.tsx` via `/@fs/<absolute-path>`. Vite's `/@fs/` escape hatch serves files outside `root` when listed in `server.fs.allow`. The HTML is passed through `server.transformIndexHtml('/', html)` before being sent — this injects the `@vitejs/plugin-react` Fast Refresh preamble. Without it, React Fast Refresh throws "can't detect preamble". This matches Vitest's tester middleware pattern (`serverTester.ts` calls `vite.transformIndexHtml(url, testerHtml)`); the difference is we pass `'/'` as the URL since our HTML is generated in-memory rather than read from a file.
+
+**`optimizeDeps.entries` — why it's required:** `main.tsx` and `frame.ts` are served via `/@fs/` from outside the consumer's Vite `root`. Vite's dep scanner only crawls files within `root`, so it never discovers what these files import. Without `entries`, CJS packages like `react-dom/client` are only found by lazy discovery on the first browser request — but the pre-bundling finishes too late, the browser gets the raw CJS file, and the named-import `SyntaxError` is fatal before the HMR client can load (so no auto-reload). `entries: [mainEntry, frameEntry]` tells Vite to scan jibe's own files at startup and pre-bundle everything they need. There is no per-run cost on cached runs; the entry file contents are part of the cache hash.
 
 ### Plugin internals
 
 `workshopPlugin()` in `src/plugin.ts` handles iframe test loading and the vitest shim:
 
 - `enforce: 'pre'` — runs before other plugins so the `vitest` alias wins and relative `vi.mock()` paths are rewritten before `hoistMocksPlugin` runs
-- `resolveVitest(pkg)` — resolves pnpm-deduped `@vitest/*` packages via vitest's own require context, since pnpm doesn't hoist them to the root `node_modules`
+- `resolveVitest(pkg)` — resolves pnpm-deduped `@vitest/*` packages via vitest's own require context, since pnpm doesn't hoist them to the root `node_modules`. When jibe runs inside a consumer project (common case), `import.meta.url` points to jibe's `dist/` which has no vitest — so the first lookup fails silently and a fallback resolves vitest from `process.cwd()` (the consumer's project root) instead
 - `config()` hook returns aliases for `@vitest/spy`, `@vitest/runner`, and `@vitest/mocker/auto-register` (the last points directly to `dist/auto-register.js`, bypassing the package exports map which routes to the wrong file), plus `optimizeDeps: { exclude: [...] }` to prevent pre-bundling
 - `transform()` hook has two responsibilities: (1) replaces `__VITEST_GLOBAL_THIS_ACCESSOR__` / `__VITEST_MOCKER_ROOT__` bare identifiers in `@vitest/mocker`'s `register.js` (content-based — avoids path-comparison issues); (2) rewrites relative `vi.mock('./path')` specifiers to project-root-absolute paths before the hoist transform runs
 - `resolveId('vitest')` → returns `'\0virtual:workshop-vitest'`

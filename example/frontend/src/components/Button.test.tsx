@@ -1,18 +1,24 @@
 import { test, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { Button } from './Button.js'
+import { param } from '@jibe/workshop'
 
 test('primary', { meta: { jibe: { name: 'Primary Button' } } }, () => {
-  render(<Button label="Click me" variant="primary" />)
-  expect(screen.getByRole('button', { name: 'Click me' })).toBeTruthy()
+  const label    = param('label',    'Click me', { label: 'Label' })
+  const variant  = param('variant',  'primary' as 'primary' | 'danger' | 'ghost', { label: 'Variant', options: ['primary', 'danger', 'ghost'] })
+  const disabled = param('disabled', false,       { label: 'Disabled' })
+  render(<Button label={label} variant={variant} disabled={disabled} />)
+  expect(screen.getByRole('button', { name: label })).toBeTruthy()
 })
 
-test('danger', () => {
-  render(<Button label="Delete" variant="danger" />)
-  expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy()
+test('danger', { meta: { jibe: { name: 'Danger Button' } } }, () => {
+  const label = param('label', 'Delete', { label: 'Label' })
+  render(<Button label={label} variant="danger" />)
+  expect(screen.getByRole('button', { name: label })).toBeTruthy()
 })
 
-test('ghost / disabled', () => {
-  render(<Button label="Cancel" variant="ghost" disabled />)
-  expect(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true)
+test('ghost / disabled', { meta: { jibe: { name: 'Ghost Button' } } }, () => {
+  const label = param('label', 'Cancel', { label: 'Label' })
+  render(<Button label={label} variant="ghost" disabled />)
+  expect(screen.getByRole('button', { name: label }).hasAttribute('disabled')).toBe(true)
 })

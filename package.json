@@ -5,14 +5,15 @@
   "bin": {
     "jibe": "./cli.mjs"
   },
+  "files": ["cli.mjs", "dist", "src"],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"
   },
-  "types": "./src/types.d.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./src/types.d.ts",
+      "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
     "./plugin": "./src/plugin.ts",
@@ -22,7 +23,7 @@
     "@vitejs/plugin-react": ">=4",
     "react": ">=18",
     "react-dom": ">=18",
-    "vite": ">=6",
+    "vite": ">=5",
     "vitest": "^4.1.6"
   },
   "devDependencies": {
