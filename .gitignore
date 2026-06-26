@@ -152,5 +152,4 @@ vite.config.ts.timestamp-*
 # Test artifacts
 test/fixtures/*/node_modules/
 test/fixtures/*/package-lock.json
-test/fixtures/*/jibe-dist/
 test/fixtures/*/workshop-dist/

@@ -4,7 +4,7 @@ export function workshopBuildHtml(uiJsPath: string): string {
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Jibe Workshop</title>
+    <title>Vignet Workshop</title>
   </head>
   <body>
     <div id="root"></div>
@@ -17,7 +17,7 @@ export function workshopBuildHtml(uiJsPath: string): string {
 export function frameBuildHtml(frameJsPath: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
-  <head><meta charset="UTF-8" /><title>Jibe Frame</title></head>
+  <head><meta charset="UTF-8" /><title>Vignet Frame</title></head>
   <body>
     <script>
       // Node.js globals are not available in browsers. Test bundles include packages like
@@ -34,7 +34,7 @@ export function frameBuildHtml(frameJsPath: string): string {
 export function frameHtml(frameEntry: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
-  <head><meta charset="UTF-8" /><title>Jibe Frame</title></head>
+  <head><meta charset="UTF-8" /><title>Vignet Frame</title></head>
   <body><script type="module" src="/@fs${frameEntry}"></script></body>
 </html>`
 }
@@ -44,7 +44,7 @@ export function workshopHtml(mainEntry: string): string {
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Jibe Workshop</title>
+    <title>Vignet Workshop</title>
   </head>
   <body>
     <div id="root"></div>

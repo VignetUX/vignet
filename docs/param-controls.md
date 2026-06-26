@@ -1,6 +1,6 @@
 # Param Controls — Design
 
-Interactive parameter controls that let users modify inputs in the workshop UI and see component re-renders. Unlike Storybook's Controls addon (which restricts controls to component props), jibe params work for anything in a test body: props, mock return values, feature flag states, network delays, etc.
+Interactive parameter controls that let users modify inputs in the workshop UI and see component re-renders. Unlike Storybook's Controls addon (which restricts controls to component props), vignet params work for anything in a test body: props, mock return values, feature flag states, network delays, etc.
 
 ---
 
@@ -24,7 +24,7 @@ export function param<T>(key: string, defaultValue: T): T {
 Extend the existing `param(key, default)` with an optional third argument for control metadata. The function name stays `param`.
 
 ```ts
-import { param } from '@jibe/workshop/runtime'
+import { param } from '@vignet/workshop/runtime'
 
 // text input (inferred from string default)
 const label = param('label', 'Click me')
@@ -67,7 +67,7 @@ interface ParamOptions {
 }
 ```
 
-In real Vitest (`npm test`): `param` is imported from the actual `@jibe/workshop/runtime` file with no workshop globals. It must return `defaultValue` unconditionally:
+In real Vitest (`npm test`): `param` is imported from the actual `@vignet/workshop/runtime` file with no workshop globals. It must return `defaultValue` unconditionally:
 
 ```ts
 export function param<T>(key: string, defaultValue: T, _opts?: ParamOptions): T {
@@ -83,9 +83,9 @@ export function param<T>(key: string, defaultValue: T, _opts?: ParamOptions): T 
 `param()` works anywhere in the test body — including inside mock implementations:
 
 ```ts
-import { param } from '@jibe/workshop/runtime'
+import { param } from '@vignet/workshop/runtime'
 
-it('profile form — configurable network state', { meta: { jibe: { name: 'Network states' } } }, async () => {
+it('profile form — configurable network state', { meta: { vignet: { name: 'Network states' } } }, async () => {
   const status  = param('status',  200,  { options: [200, 401, 500] })
   const latency = param('latency', 0,    { min: 0, max: 3000, step: 100 })
 
@@ -144,7 +144,7 @@ Both work with this approach:
 // file-level — runs at import time during collectTests
 const theme = param('theme', 'light', { options: ['light', 'dark'] })
 
-it('button', { meta: { jibe: { name: 'Primary' } } }, () => {
+it('button', { meta: { vignet: { name: 'Primary' } } }, () => {
   // test-body — runs when entry.fn() executes
   const label = param('label', 'Click me')
   render(<ThemeProvider theme={theme}><Button label={label} /></ThemeProvider>)

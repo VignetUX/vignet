@@ -4,12 +4,12 @@ import { join, sep, isAbsolute, relative } from 'path'
 import { workshopPlugin, getMockerPlugins } from '../plugin.js'
 import { frameHtml, workshopHtml } from './templates.js'
 
-const jibeDir = fileURLToPath(new URL('../', import.meta.url))
+const vignetDir = fileURLToPath(new URL('../', import.meta.url))
 
 // Load the consumer's vite.config.ts and return only the parts that are safe to forward:
 // plugins (e.g. vite-tsconfig-paths, custom resolvers) and resolve config (aliases).
 // We deliberately do NOT forward server, base, appType, build, etc. — those settings
-// control how the consumer's app is served and would break jibe's own server if inherited.
+// control how the consumer's app is served and would break vignet's own server if inherited.
 async function loadConsumerPluginsAndResolve(root: string): Promise<{ plugins: any[]; resolve: any }> {
   try {
     const result = await loadConfigFromFile({ command: 'serve', mode: 'development' }, undefined, root)
@@ -23,7 +23,7 @@ async function loadConsumerPluginsAndResolve(root: string): Promise<{ plugins: a
   }
 }
 
-export async function startJibeServer(vitest: any): Promise<void> {
+export async function startVignetServer(vitest: any): Promise<void> {
   const rawDir: string | undefined = vitest?.config?.dir
   const rawInclude: string | string[] | undefined = vitest?.config?.include
 
@@ -42,15 +42,15 @@ export async function startJibeServer(vitest: any): Promise<void> {
     }
   }
 
-  const mainEntry = join(jibeDir, 'src/ui/main.tsx')
-  const frameEntry = join(jibeDir, 'src/frame.ts')
+  const mainEntry = join(vignetDir, 'src/ui/main.tsx')
+  const frameEntry = join(vignetDir, 'src/frame.ts')
 
   const mockerPlugins = await getMockerPlugins()
   const { plugins: consumerPlugins, resolve: consumerResolve } = await loadConsumerPluginsAndResolve(process.cwd())
 
   const server = await createServer({
     configFile: false,
-    // Disables Vite's SPA fallback — jibe controls all routes via jibeServerPlugin.
+    // Disables Vite's SPA fallback — vignet controls all routes via vignetServerPlugin.
     appType: 'custom',
     root: process.cwd(),
     // Forward only resolve config from the consumer (aliases, mainFields, etc.).
@@ -58,8 +58,8 @@ export async function startJibeServer(vitest: any): Promise<void> {
     ...(Object.keys(consumerResolve).length && { resolve: consumerResolve }),
     server: {
       open: '/',
-      // jibeDir must be allowed so /@fs/ can serve main.tsx and frame.ts from jibe's src/
-      fs: { allow: [process.cwd(), jibeDir] },
+      // vignetDir must be allowed so /@fs/ can serve main.tsx and frame.ts from vignet's src/
+      fs: { allow: [process.cwd(), vignetDir] },
     },
     // main.tsx and frame.ts are served via /@fs/ from outside the consumer's Vite root,
     // so Vite's dep scanner never crawls them. Without entries, CJS packages they import
@@ -69,9 +69,9 @@ export async function startJibeServer(vitest: any): Promise<void> {
     optimizeDeps: {
       entries: [mainEntry, frameEntry],
     },
-    // consumerPlugins first so their resolveId/transform hooks run before jibe's shim.
+    // consumerPlugins first so their resolveId/transform hooks run before vignet's shim.
     // This ensures vite-tsconfig-paths and similar plugins resolve imports correctly.
-    plugins: [...consumerPlugins, workshopPlugin({ include: consumerInclude }), ...mockerPlugins, jibeServerPlugin(mainEntry, frameEntry, vitest)],
+    plugins: [...consumerPlugins, workshopPlugin({ include: consumerInclude }), ...mockerPlugins, vignetServerPlugin(mainEntry, frameEntry, vitest)],
   })
 
   await server.listen()
@@ -83,14 +83,14 @@ export async function startJibeServer(vitest: any): Promise<void> {
  * by the time `createServer()` returns, Vite has already registered
  * its internal middleware (including the SPA HTML fallback).
  * A plugin's `configureServer` hook runs *before* that registration, so
- * jibe's middleware intercepts requests first. Adding to `server.middlewares`
+ * vignet's middleware intercepts requests first. Adding to `server.middlewares`
  * after `createServer()` returns would place the handler after Vite's fallback.
  * This is the same pattern Vitest uses in its browser plugin
  * (`packages/browser/src/node/plugin.ts`).
  */
-function jibeServerPlugin(mainEntry: string, frameEntry: string, _vitest: unknown) {
+function vignetServerPlugin(mainEntry: string, frameEntry: string, _vitest: unknown) {
   return {
-    name: 'jibe:server',
+    name: 'vignet:server',
     configureServer(server: ViteDevServer) {
       server.middlewares.use(async (req: any, res: any, next: () => void) => {
         if (req.url?.startsWith('/frame')) {

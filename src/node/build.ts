@@ -8,7 +8,7 @@ import { workshopPlugin, discoverWorkshopFiles, getHoistMocksPlugin } from '../p
 import { buildMockPlugin } from './build-plugin.js'
 import { workshopBuildHtml, frameBuildHtml } from './templates.js'
 
-const jibeDir = fileURLToPath(new URL('../', import.meta.url))
+const vignetDir = fileURLToPath(new URL('../', import.meta.url))
 
 function shortHash(str: string): string {
   return createHash('md5').update(str).digest('hex').slice(0, 8)
@@ -17,7 +17,7 @@ function shortHash(str: string): string {
 function extractViewNames(filePath: string): string[] {
   const content = readFileSync(filePath, 'utf-8')
   const names: string[] = []
-  const re = /meta\s*:\s*\{[^}]*jibe\s*:\s*\{[^}]*name\s*:\s*['"`]([^'"`]+)['"`]/g
+  const re = /meta\s*:\s*\{[^}]*vignet\s*:\s*\{[^}]*name\s*:\s*['"`]([^'"`]+)['"`]/g
   let m: RegExpExecArray | null
   while ((m = re.exec(content)) !== null) names.push(m[1])
   return names
@@ -27,23 +27,23 @@ export async function buildWorkshop(root: string, outDir: string): Promise<void>
   const include = 'src/**/*.test.{ts,tsx}'
   const absOutDir = resolve(root, outDir)
 
-  console.log(`[jibe] Building workshop to ${absOutDir}`)
+  console.log(`[vignet] Building workshop to ${absOutDir}`)
 
   const files = await discoverWorkshopFiles(root, include)
   if (files.length === 0) {
-    console.warn('[jibe] No workshop files found (no files with jibe: marker match the include pattern).')
+    console.warn('[vignet] No workshop files found (no files with vignet: marker match the include pattern).')
   }
 
   // 1. Build the UI shell as an ES module library.
-  //    define: { __JIBE_BUILD_MODE__: 'true' } inlines the build-mode flag so App.tsx
+  //    define: { __VIGNET_BUILD_MODE__: 'true' } inlines the build-mode flag so App.tsx
   //    fetches manifest.json instead of /__workshop_files__.
-  const uiEntry = resolve(jibeDir, 'src/ui/main.tsx')
+  const uiEntry = resolve(vignetDir, 'src/ui/main.tsx')
   await viteBuild({
     configFile: false,
-    root: jibeDir,
+    root: vignetDir,
     plugins: [react(), workshopPlugin({ buildMode: true })],
     define: {
-      __JIBE_BUILD_MODE__: 'true',
+      __VIGNET_BUILD_MODE__: 'true',
       // Vite's library mode does not auto-replace process.env.NODE_ENV the way app mode does.
       // React checks this at runtime to choose its dev vs production bundle; without this
       // define the reference survives into the output and throws in browsers (no process global).
@@ -58,15 +58,15 @@ export async function buildWorkshop(root: string, outDir: string): Promise<void>
         fileName: () => 'ui.js',
       },
     },
-    server: { fs: { allow: [root, jibeDir] } },
+    server: { fs: { allow: [root, vignetDir] } },
   })
   writeFileSync(path.join(absOutDir, 'index.html'), workshopBuildHtml('./ui.js'))
 
   // 2. Build the static frame runtime (frame-static.ts → frame.js).
-  const frameStaticEntry = resolve(jibeDir, 'src/frame-static.ts')
+  const frameStaticEntry = resolve(vignetDir, 'src/frame-static.ts')
   await viteBuild({
     configFile: false,
-    root: jibeDir,
+    root: vignetDir,
     plugins: [workshopPlugin({ buildMode: true })],
     build: {
       outDir: absOutDir,
@@ -108,7 +108,7 @@ export async function buildWorkshop(root: string, outDir: string): Promise<void>
           fileName: () => bundleFile,
         },
       },
-      server: { fs: { allow: [root, jibeDir] } },
+      server: { fs: { allow: [root, vignetDir] } },
     })
 
     manifest.push({
@@ -117,7 +117,7 @@ export async function buildWorkshop(root: string, outDir: string): Promise<void>
       views: extractViewNames(file),
     })
 
-    console.log(`[jibe] Built ${relative(root, file)} → tests/${bundleFile}`)
+    console.log(`[vignet] Built ${relative(root, file)} → tests/${bundleFile}`)
   }
 
   writeFileSync(
@@ -125,5 +125,5 @@ export async function buildWorkshop(root: string, outDir: string): Promise<void>
     JSON.stringify({ files: manifest }, null, 2),
   )
 
-  console.log(`[jibe] Done. ${manifest.length} file(s) built. Output: ${absOutDir}`)
+  console.log(`[vignet] Done. ${manifest.length} file(s) built. Output: ${absOutDir}`)
 }

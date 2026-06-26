@@ -12,7 +12,7 @@ declare global {
     __workshop_registry__: Array<{
       name: string
       fn: () => Promise<void> | void
-      jibeviewName?: string
+      vignetviewName?: string
       hooks?: {
         beforeAll: Array<() => Promise<void> | void>
         beforeEach: Array<() => Promise<void> | void>
@@ -58,7 +58,7 @@ if (!bundle) {
 
   const all = window.__workshop_registry__.map((t, i) => ({
     name: t.name,
-    displayName: t.jibeviewName,
+    displayName: t.vignetviewName,
     index: i,
   }))
   const hasViews = all.some(t => t.displayName !== undefined)
@@ -69,7 +69,7 @@ if (!bundle) {
     const index = parseInt(runParam, 10)
     const entry = window.__workshop_registry__[index]
 
-    if (entry && (!hasViews || entry.jibeviewName !== undefined)) {
+    if (entry && (!hasViews || entry.vignetviewName !== undefined)) {
       const hooks = entry.hooks ?? { beforeAll: [], beforeEach: [], afterEach: [], afterAll: [] }
       for (const h of hooks.beforeAll) await h()
       for (const h of hooks.beforeEach) await h()

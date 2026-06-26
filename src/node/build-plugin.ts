@@ -117,7 +117,7 @@ function collectMocks(code: string, fileDir: string, root: string, warn: (msg: s
     // Check for factory argument
     const commaIdx = findArgSplitComma(argsContent)
     if (commaIdx === -1) {
-      warn(`[jibe] Auto-mock not supported in static builds: vi.mock('${rawId}') — real module will be bundled.`)
+      warn(`[vignet] Auto-mock not supported in static builds: vi.mock('${rawId}') — real module will be bundled.`)
       continue
     }
     const factory = argsContent.slice(commaIdx + 1).trim()

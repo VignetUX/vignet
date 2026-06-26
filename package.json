@@ -1,9 +1,9 @@
 {
-  "name": "@jibe/workshop",
+  "name": "@vignet/workshop",
   "version": "0.0.1",
   "type": "module",
   "bin": {
-    "jibe": "./cli.mjs"
+    "vignet": "./cli.mjs"
   },
   "files": ["cli.mjs", "dist", "src"],
   "scripts": {
