@@ -5,8 +5,8 @@ import { createRequire } from 'module'
 
 // Resolve a vitest sub-package via vitest's own require context.
 // pnpm doesn't hoist @vitest/* to the root node_modules, so we go through vitest.
-// When jibe runs inside a consumer project, import.meta.url points to jibe's dist/
-// and vitest is not in jibe's own node_modules (it's a peer dep), so the first attempt
+// When vignet runs inside a consumer project, import.meta.url points to vignet's dist/
+// and vitest is not in vignet's own node_modules (it's a peer dep), so the first attempt
 // returns null. The fallback resolves vitest from process.cwd() (the consumer's project
 // root) so aliases still point to the correct version vitest uses internally.
 function resolveVitest(pkg: string): string | null {
@@ -71,7 +71,7 @@ export function test(name, optionsOrFn, fn) {
     afterAll:   [...hookStack].reverse().flatMap(s => s.afterAll),
   }
   const entry = { name, fn: testFn, hooks }
-  if (opts?.meta?.jibe?.name) entry.jibeviewName = opts.meta.jibe.name
+  if (opts?.meta?.vignet?.name) entry.vignetviewName = opts.meta.vignet.name
   ;(window.__workshop_registry__ = window.__workshop_registry__ || []).push(entry)
 }
 export const it = test
@@ -128,7 +128,7 @@ export function test(name, optionsOrFn, fn) {
   const testFn = typeof optionsOrFn === 'function' ? optionsOrFn : fn
   _test(name, testFn)
   const entry = { name, fn: testFn }
-  if (opts?.meta?.jibe?.name) entry.jibeviewName = opts.meta.jibe.name
+  if (opts?.meta?.vignet?.name) entry.vignetviewName = opts.meta.vignet.name
   ;(window.__workshop_registry__ = window.__workshop_registry__ || []).push(entry)
 }
 export const it = test
@@ -205,18 +205,18 @@ export async function getMockerPlugins(): Promise<Plugin[]> {
   return plugins
 }
 
-// Discovers test files for the workshop — same glob + jibe: filter used in both dev and build modes.
+// Discovers test files for the workshop — same glob + vignet: filter used in both dev and build modes.
 export async function discoverWorkshopFiles(root: string, include: string | string[]): Promise<string[]> {
   const patterns = Array.isArray(include) ? include : [include]
   const files: string[] = []
   for (const pattern of patterns) {
     // Exclude node_modules explicitly: Yarn 1 installs file: dependencies as symlinks to
-    // the entire source tree, so jibe's own example/ test files end up accessible under
-    // node_modules/@jibe/workshop/ and would otherwise appear in the consumer's sidebar.
+    // the entire source tree, so vignet's own example/ test files end up accessible under
+    // node_modules/@vignet/workshop/ and would otherwise appear in the consumer's sidebar.
     // The package.json "files" field prevents this for npm/pnpm/Yarn Berry but not Yarn 1.
     for await (const f of glob(pattern, { cwd: root, exclude: (f) => f.includes('node_modules') })) {
       const content = await readFile(path.join(root, f), 'utf-8')
-      if (content.includes('jibe:')) {
+      if (content.includes('vignet:')) {
         files.push(path.join(root, f))
       }
     }

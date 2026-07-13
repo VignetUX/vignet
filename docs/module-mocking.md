@@ -1,4 +1,4 @@
-# Module mocking in the Jibe workshop
+# Module mocking in the Vignet workshop
 
 ## Status: implemented via `@vitest/mocker`
 
@@ -9,7 +9,7 @@ both auto-mocks (`vi.mock('id')`) and factory mocks (`vi.mock('id', () => ...)`)
 
 ## Architecture
 
-Jibe delegates the entire mock infrastructure to `@vitest/mocker`, a standalone package that
+Vignet delegates the entire mock infrastructure to `@vitest/mocker`, a standalone package that
 ships with vitest. `@vitest/mocker` communicates over **Vite's built-in HMR WebSocket**
 (`import.meta.hot` client-side, `server.ws` server-side) — it has no dependency on vitest's
 orchestrator, birpc, or any other vitest-specific RPC layer.

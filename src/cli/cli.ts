@@ -4,7 +4,7 @@ import { resolve } from 'path'
 import cac from 'cac'
 import { buildWorkshop } from '../node/build.js'
 
-const cli = cac('jibe')
+const cli = cac('vignet')
 
 cli
   .command('build', 'Build a static deployable workshop')
@@ -20,7 +20,7 @@ cli
     await startDevServer(options.config)
   })
 
-// Default command (bare `jibe` with no subcommand) starts the dev server
+// Default command (bare `vignet` with no subcommand) starts the dev server
 cli
   .command('', 'Start the workshop dev server')
   .option('--config <file>', 'Path to vitest config file')
@@ -33,7 +33,7 @@ cli.version('0.0.1')
 cli.parse()
 
 async function startDevServer(configFile?: string): Promise<void> {
-  const { startJibeServer } = await import('../node/server.js')
+  const { startVignetServer } = await import('../node/server.js')
 
   // Resolve vitest from the consumer project so workers find their own deps (e.g. jsdom)
   const consumerRequire = createRequire(resolve(process.cwd(), 'package.json'))
@@ -42,5 +42,5 @@ async function startDevServer(configFile?: string): Promise<void> {
 
   const resolvedConfig = configFile ? resolve(process.cwd(), configFile) : undefined
   const vitest = await createVitest('test', { watch: true, ...(resolvedConfig && { config: resolvedConfig }) })
-  await startJibeServer(vitest)
+  await startVignetServer(vitest)
 }

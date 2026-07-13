@@ -1,8 +1,8 @@
-# Static Build Architecture (`jibe build`)
+# Static Build Architecture (`vignet build`)
 
 ## Goal
 
-Produce a fully static deployable output so the workshop can be hosted on any CDN with no Node.js server. This is the intended SaaS deployment model: consumer runs `jibe build` in CI, uploads the output, and the SaaS serves it statically.
+Produce a fully static deployable output so the workshop can be hosted on any CDN with no Node.js server. This is the intended SaaS deployment model: consumer runs `vignet build` in CI, uploads the output, and the SaaS serves it statically.
 
 ## Why Static Is Viable Despite Mocks
 
@@ -168,7 +168,7 @@ Downside: requires HTTPS or localhost (rules out some CDN preview flows), servic
 | `src/plugin.ts` | Add `buildMode` option to `workshopPlugin()` (skips server middleware + uses static shim); add `VIRTUAL_VITEST_STATIC_SRC` (static hook-capture shim); extract `discoverWorkshopFiles()` helper |
 | `src/frame-static.ts` | New — standalone static frame runtime: loads `?bundle=` script, reads registry with hooks, runs selected view |
 | `src/node/templates.ts` | Add `frameBuildHtml()` for the static frame shell |
-| `src/ui/App.tsx` | Detect `__JIBE_BUILD_MODE__` compile-time constant; fetch `manifest.json` and use bundle-based iframe URLs in build mode |
+| `src/ui/App.tsx` | Detect `__VIGNET_BUILD_MODE__` compile-time constant; fetch `manifest.json` and use bundle-based iframe URLs in build mode |
 | `src/cli/cli.ts` | Restructure with `cac` to support `dev` (default) and `build [--out <dir>]` subcommands |
 
 ## Build Orchestration
@@ -176,13 +176,13 @@ Downside: requires HTTPS or localhost (rules out some CDN preview flows), servic
 ```ts
 // src/node/build.ts
 async function buildWorkshop(root: string, outDir: string) {
-  const files = await discoverWorkshopFiles(root, include)  // same glob + jibe: filter as dev mode
+  const files = await discoverWorkshopFiles(root, include)  // same glob + vignet: filter as dev mode
 
-  // Build the UI shell (React app) — injects __JIBE_BUILD_MODE__ compile-time constant
-  await vite.build({ plugins: [react(), workshopPlugin({ buildMode: true })], define: { __JIBE_BUILD_MODE__: 'true' }, ... })
+  // Build the UI shell (React app) — injects __VIGNET_BUILD_MODE__ compile-time constant
+  await vite.build({ plugins: [react(), workshopPlugin({ buildMode: true })], define: { __VIGNET_BUILD_MODE__: 'true' }, ... })
 
   // Build the static frame runtime
-  await vite.build({ entry: resolve(jibeDir, 'src/frame-static.ts'), ... })
+  await vite.build({ entry: resolve(vignetDir, 'src/frame-static.ts'), ... })
 
   // Build each test file as an isolated ES module bundle
   const manifest = []
@@ -203,7 +203,7 @@ async function buildWorkshop(root: string, outDir: string) {
 
 ```bash
 # Run the static build from the consumer project root
-npx jibe build --out ./workshop-dist
+npx vignet build --out ./workshop-dist
 
 # Verify output
 cat workshop-dist/manifest.json
@@ -212,8 +212,8 @@ ls workshop-dist/tests/
 # Preview locally
 npx serve workshop-dist
 
-# Deploy (example: Jibe CLI)
-Jibe deploy --dir workshop-dist --prod
+# Deploy (example: Vignet CLI)
+vignet deploy --dir workshop-dist --prod
 ```
 
-For CI, add a step after `npm test` to run `jibe build` and upload `workshop-dist/` to the SaaS or a CDN bucket.
+For CI, add a step after `npm test` to run `vignet build` and upload `workshop-dist/` to the SaaS or a CDN bucket.

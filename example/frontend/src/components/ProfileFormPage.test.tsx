@@ -37,12 +37,12 @@ describe('ProfileFormPage', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders the header', { meta: { jibe: { name: 'Header' } } }, () => {
+  it('renders the header', { meta: { vignet: { name: 'Header' } } }, () => {
     renderAtRoute()
     expect(screen.getByRole('heading', { name: 'Acme' })).toBeInTheDocument()
   })
 
-  it('shows an empty form when no id is in the url', { meta: { jibe: { name: 'Empty form' } } }, () => {
+  it('shows an empty form when no id is in the url', { meta: { vignet: { name: 'Empty form' } } }, () => {
     render(<ProfileFormPage />);
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Name')).toHaveValue('')
@@ -56,7 +56,7 @@ describe('ProfileFormPage', () => {
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
   })
 
-  it('pre-fills the form with data returned from the backend', { meta: { jibe: { name: 'Pre-filled form' } } }, async () => {
+  it('pre-fills the form with data returned from the backend', { meta: { vignet: { name: 'Pre-filled form' } } }, async () => {
     mockFetch(true, SAMPLE_DATA)
     renderAtRoute('123')
     await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument())

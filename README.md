@@ -1,16 +1,18 @@
-# Jibe vitest prototype
+# Vignet
+
+
 
 ## Building and running
 
-For active CLI development, run pnpm dev (tsup --watch) in root — it rebuilds dist/cli.js automatically on every save. Then each pnpm jibe in example/frontend picks up the latest build instantly.
+For active CLI development, run pnpm dev (tsup --watch) in root — it rebuilds dist/cli.js automatically on every save. Then each pnpm vignet in example/frontend picks up the latest build instantly.
 
 To get a clean build via tsup, you pass --clean on the CLI or clean: true in the config.
 
-To start the jibe workspace run: `pnpm --filter workshop-example jibe`.
+To start the vignet workspace run: `pnpm --filter workshop-example vignet`.
 
 ## Marking workshop views
 
-Only tests explicitly marked with `meta.jibe.name` appear in the workshop. Use the standard `it(name, options, fn)` overload — no extra imports needed:
+Only tests explicitly marked with `meta.vignet.name` appear in the workshop. Use the standard `it(name, options, fn)` overload — no extra imports needed:
 
 ```ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -18,7 +20,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 describe('ProfileFormPage', () => {
   beforeEach(() => { vi.restoreAllMocks() })
 
-  it('renders the header', { meta: { jibe: { name: 'Header' } } }, () => {
+  it('renders the header', { meta: { vignet: { name: 'Header' } } }, () => {
     renderAtRoute()
     expect(screen.getByRole('heading', { name: 'Acme' })).toBeInTheDocument()
   })
@@ -28,15 +30,15 @@ describe('ProfileFormPage', () => {
 })
 ```
 
-- `meta.jibe.name` is the label shown in the workshop sidebar
-- Files with no `meta.jibe` calls are excluded from the workshop sidebar entirely
+- `meta.vignet.name` is the label shown in the workshop sidebar
+- Files with no `meta.vignet` calls are excluded from the workshop sidebar entirely
 - In `npm test` mode the option is stored on `task.meta` by Vitest and ignored — all tests run normally
 
-**TypeScript setup:** add `/// <reference types="@jibe/workshop" />` to your test setup file (e.g. `test/setup.ts`) and ensure `test/` is in your `tsconfig`'s `include` array. This activates the `TaskMeta` augmentation that makes `meta.jibe` a known type.
+**TypeScript setup:** add `/// <reference types="@vignet/workshop" />` to your test setup file (e.g. `test/setup.ts`) and ensure `test/` is in your `tsconfig`'s `include` array. This activates the `TaskMeta` augmentation that makes `meta.vignet` a known type.
 
 ## Routing in the workshop
 
-The jibe server only exposes two routes: `/` (workshop UI) and `/frame` (the test iframe). It sets `appType: 'custom'` in `createServer()`, which disables Vite's SPA fallback entirely. Any other path returns a 404 rather than silently serving the consumer app's `index.html`.
+The vignet server only exposes two routes: `/` (workshop UI) and `/frame` (the test iframe). It sets `appType: 'custom'` in `createServer()`, which disables Vite's SPA fallback entirely. Any other path returns a 404 rather than silently serving the consumer app's `index.html`.
 
 Components that use `useParams()` or other React Router hooks need a router context to render. Test files should wrap such components in a `MemoryRouter` (as shown in `ProfileFormPage.test.tsx`). This creates an isolated router context inside the iframe without touching real browser navigation, and is the correct pattern for workshop-previewing any router-dependent component.
 
@@ -44,5 +46,5 @@ Components that use `useParams()` or other React Router hooks need a router cont
 
 In `example/frontend`:
 
-- Build static output: `pnpm jibe:build`
+- Build static output: `pnpm vignet:build`
 - Then serve it: `npx serve workshop-dist`

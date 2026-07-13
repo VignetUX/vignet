@@ -6,8 +6,8 @@
         "dev": "vite",
         "build": "tsc -b && vite build",
         "test": "vitest",
-        "jibe": "jibe",
-        "jibe:build": "jibe build"
+        "vignet": "vignet",
+        "vignet:build": "vignet build"
     },
     "dependencies": {
         "@emotion/react": "^11.14.0",
@@ -21,7 +21,7 @@
         "react-router-dom": "^7.15.1"
     },
     "devDependencies": {
-        "@jibe/workshop": "workspace:*",
+        "@vignet/workshop": "workspace:*",
         "@react-router/dev": "^7.15.1",
         "@testing-library/dom": "^10.4.1",
         "@testing-library/jest-dom": "^6.9.1",

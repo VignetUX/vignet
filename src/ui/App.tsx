@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ParamSchemaEntry } from '../runtime'
 
-declare const __JIBE_BUILD_MODE__: boolean | undefined
+declare const __VIGNET_BUILD_MODE__: boolean | undefined
 
 interface Test {
   name: string
@@ -19,7 +19,7 @@ function fileLabel(filePath: string): string {
   return filePath.replace(/.*\//, '').replace(/\.test\.[tj]sx?$/, '')
 }
 
-const isBuildMode = typeof __JIBE_BUILD_MODE__ !== 'undefined' && __JIBE_BUILD_MODE__
+const isBuildMode = typeof __VIGNET_BUILD_MODE__ !== 'undefined' && __VIGNET_BUILD_MODE__
 
 // Encodes param values into URL-safe p.* query/hash params.
 function encodeParams(params: Record<string, unknown>): string {
@@ -256,7 +256,7 @@ export function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
       <div style={{ padding: '10px 16px', borderBottom: '1px solid #e0e0e0', background: '#fff' }}>
-        <strong>Jibe Workshop</strong>
+        <strong>Vignet Workshop</strong>
       </div>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ width: 220, borderRight: '1px solid #e0e0e0', overflowY: 'auto', background: '#fafafa' }}>
