@@ -151,6 +151,7 @@ export function App() {
   const [selectedRun, setSelectedRun] = useState<number | null>(null)
   const [paramSchema, setParamSchema] = useState<ParamSchemaEntry[]>([])
   const [paramValues, setParamValues] = useState<Record<string, unknown>>({})
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
     if (isBuildMode) {
@@ -233,48 +234,63 @@ export function App() {
 
   return (
     <div className="vg-app">
-      <div className="vg-topbar">
-        <div className="vg-brand">
-          <div className="vg-brand-mark">
-            <img src={vignetIcon} alt="Vignet" />
+      {!isFullscreen && (
+        <div className="vg-topbar">
+          <div className="vg-brand">
+            <div className="vg-brand-mark">
+              <img src={vignetIcon} alt="Vignet" />
+            </div>
+            <div className="vg-brand-text">vignet</div>
           </div>
-          <div className="vg-brand-text">vignet</div>
+          <button type="button" className="vg-fullscreen-btn" title="Fullscreen" onClick={() => setIsFullscreen(true)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+              <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+              <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+              <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+            </svg>
+          </button>
         </div>
-        <button type="button" className="vg-fullscreen-btn" title="Fullscreen">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-            <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
-            <path d="M3 16v3a2 2 0 0 0 2 2h3" />
-            <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-          </svg>
-        </button>
-      </div>
+      )}
       <div className="vg-body">
-        <div className="vg-sidebar">
-          <div className="vg-sidebar-scroll">
-            {files.map(file => (
-              <div key={file}>
-                <div
-                  className={`vg-file-row${selectedFile === file ? ' is-selected' : ''}`}
-                  onClick={() => selectFile(file)}
-                >
-                  {fileLabel(file)}
-                </div>
-                {selectedFile === file && tests.map(test => (
+        {!isFullscreen && (
+          <div className="vg-sidebar">
+            <div className="vg-sidebar-scroll">
+              {files.map(file => (
+                <div key={file}>
                   <div
-                    key={test.index}
-                    className={`vg-variant-row${selectedRun === test.index ? ' is-selected' : ''}`}
-                    onClick={() => selectTest(test.index)}
+                    className={`vg-file-row${selectedFile === file ? ' is-selected' : ''}`}
+                    onClick={() => selectFile(file)}
                   >
-                    <span className="vg-variant-dot" />
-                    <span>{test.displayName ?? test.name}</span>
+                    {fileLabel(file)}
                   </div>
-                ))}
-              </div>
-            ))}
+                  {selectedFile === file && tests.map(test => (
+                    <div
+                      key={test.index}
+                      className={`vg-variant-row${selectedRun === test.index ? ' is-selected' : ''}`}
+                      onClick={() => selectTest(test.index)}
+                    >
+                      <span className="vg-variant-dot" />
+                      <span>{test.displayName ?? test.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         <div className="vg-main">
+          {isFullscreen && (
+            <button type="button" className="vg-exit-fullscreen-btn" onClick={() => setIsFullscreen(false)}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+                <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+                <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+                <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+              </svg>
+              <span>Exit fullscreen</span>
+            </button>
+          )}
           <div className="vg-canvas">
             <iframe ref={iframeRef} />
           </div>
