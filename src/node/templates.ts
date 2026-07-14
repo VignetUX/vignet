@@ -24,7 +24,11 @@ export function workshopBuildHtml(uiJsPath: string): string {
 export function frameBuildHtml(frameJsPath: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
-  <head><meta charset="UTF-8" /><title>Vignet Frame</title></head>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Vignet Frame</title>
+    <style>html, body { margin: 0; background: transparent; }</style>
+  </head>
   <body>
     <script>
       // Node.js globals are not available in browsers. Test bundles include packages like
@@ -41,7 +45,11 @@ export function frameBuildHtml(frameJsPath: string): string {
 export function frameHtml(frameEntry: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
-  <head><meta charset="UTF-8" /><title>Vignet Frame</title></head>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Vignet Frame</title>
+    <style>html, body { margin: 0; background: transparent; }</style>
+  </head>
   <body><script type="module" src="/@fs${frameEntry}"></script></body>
 </html>`
 }

@@ -72,14 +72,9 @@ button {
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  border-radius: var(--radius-sm);
-  background: var(--brand-gradient);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
 }
 
 .vg-brand-mark img {
@@ -204,10 +199,8 @@ button {
 
 .vg-canvas iframe {
   flex: 1;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(24, 24, 31, 0.06);
+  border: none;
+  background: transparent;
 }
 
 /* ---- control panel ---- */
