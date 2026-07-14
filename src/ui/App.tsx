@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import * as Switch from '@radix-ui/react-switch'
 import type { ParamSchemaEntry } from '../runtime'
+import vignetIcon from './assets/vignet-icon.png'
 
 declare const __VIGNET_BUILD_MODE__: boolean | undefined
 
@@ -48,11 +50,10 @@ function JsonParamControl({ entry, value, onUpdate }: {
   }, [serialized])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={{ fontSize: 11, fontWeight: 600, color: '#555', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {entry.label}
-      </label>
+    <div className="vg-field">
+      <label className="vg-field-label">{entry.label}</label>
       <textarea
+        className={`vg-json${invalid ? ' is-invalid' : ''}`}
         value={text}
         rows={4}
         onChange={e => {
@@ -64,15 +65,6 @@ function JsonParamControl({ entry, value, onUpdate }: {
             setInvalid(true)
           }
         }}
-        style={{
-          fontFamily: 'monospace',
-          fontSize: 11,
-          width: 200,
-          border: `1px solid ${invalid ? '#e53935' : '#ccc'}`,
-          borderRadius: 4,
-          padding: '4px 6px',
-          resize: 'vertical',
-        }}
       />
     </div>
   )
@@ -83,33 +75,18 @@ function ParamControl({ entry, value, onUpdate }: {
   value: unknown
   onUpdate: (key: string, value: unknown, navigate: boolean) => void
 }) {
-  const labelStyle: React.CSSProperties = {
-    fontSize: 11,
-    fontWeight: 600,
-    color: '#555',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-    marginBottom: 4,
-  }
-  const inputStyle: React.CSSProperties = {
-    fontSize: 13,
-    border: '1px solid #ccc',
-    borderRadius: 4,
-    padding: '3px 6px',
-  }
-
   if (entry.control === 'json') {
     return <JsonParamControl entry={entry} value={value} onUpdate={onUpdate} />
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={labelStyle}>{entry.label}</label>
+    <div className="vg-field">
+      <label className="vg-field-label">{entry.label}</label>
       {entry.control === 'text' && (
         <input
           type="text"
+          className="vg-input vg-input-text"
           value={String(value ?? '')}
-          style={{ ...inputStyle, width: 160 }}
           onChange={e => onUpdate(entry.key, e.target.value, false)}
           onBlur={e => onUpdate(entry.key, e.target.value, true)}
           onKeyDown={e => {
@@ -120,13 +97,13 @@ function ParamControl({ entry, value, onUpdate }: {
       {entry.control === 'number' && (
         <input
           type="number"
+          className="vg-input vg-input-number"
           value={Number(value ?? 0)}
-          style={{ ...inputStyle, width: 80 }}
           onChange={e => onUpdate(entry.key, Number(e.target.value), true)}
         />
       )}
       {entry.control === 'range' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="vg-range-row">
           <input
             type="range"
             min={entry.min}
@@ -135,21 +112,22 @@ function ParamControl({ entry, value, onUpdate }: {
             value={Number(value ?? entry.min ?? 0)}
             onChange={e => onUpdate(entry.key, Number(e.target.value), true)}
           />
-          <span style={{ fontSize: 12, color: '#333', minWidth: 32 }}>{String(value)}</span>
+          <span className="vg-range-value">{String(value)}</span>
         </div>
       )}
       {entry.control === 'boolean' && (
-        <input
-          type="checkbox"
+        <Switch.Root
+          className="vg-switch-root"
           checked={Boolean(value)}
-          style={{ width: 16, height: 16, cursor: 'pointer' }}
-          onChange={e => onUpdate(entry.key, e.target.checked, true)}
-        />
+          onCheckedChange={checked => onUpdate(entry.key, checked, true)}
+        >
+          <Switch.Thumb className="vg-switch-thumb" />
+        </Switch.Root>
       )}
       {entry.control === 'select' && (
         <select
+          className="vg-input vg-select"
           value={JSON.stringify(value)}
-          style={{ ...inputStyle, cursor: 'pointer' }}
           onChange={e => {
             try { onUpdate(entry.key, JSON.parse(e.target.value), true) }
             catch { onUpdate(entry.key, e.target.value, true) }
@@ -254,59 +232,46 @@ export function App() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid #e0e0e0', background: '#fff' }}>
-        <strong>Vignet Workshop</strong>
-      </div>
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <div style={{ width: 220, borderRight: '1px solid #e0e0e0', overflowY: 'auto', background: '#fafafa' }}>
-          {files.map(file => (
-            <div key={file}>
-              <div
-                onClick={() => selectFile(file)}
-                style={{
-                  padding: '8px 12px',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: 13,
-                  background: selectedFile === file ? '#e8f0fe' : 'transparent',
-                  color: selectedFile === file ? '#1a73e8' : '#333',
-                }}
-              >
-                {fileLabel(file)}
-              </div>
-              {selectedFile === file && tests.map(test => (
-                <div
-                  key={test.index}
-                  onClick={() => selectTest(test.index)}
-                  style={{
-                    padding: '6px 12px 6px 24px',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    background: selectedRun === test.index ? '#e8f0fe' : 'transparent',
-                    color: selectedRun === test.index ? '#1a73e8' : '#555',
-                  }}
-                >
-                  {test.displayName ?? test.name}
-                </div>
-              ))}
-            </div>
-          ))}
+    <div className="vg-app">
+      <div className="vg-topbar">
+        <div className="vg-brand">
+          <div className="vg-brand-mark">
+            <img src={vignetIcon} alt="Vignet" />
+          </div>
+          <div className="vg-brand-text">vignet</div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-          <iframe ref={iframeRef} style={{ flex: 1, border: 'none', minHeight: 0 }} />
+      </div>
+      <div className="vg-body">
+        <div className="vg-sidebar">
+          <div className="vg-sidebar-scroll">
+            {files.map(file => (
+              <div key={file}>
+                <div
+                  className={`vg-file-row${selectedFile === file ? ' is-selected' : ''}`}
+                  onClick={() => selectFile(file)}
+                >
+                  {fileLabel(file)}
+                </div>
+                {selectedFile === file && tests.map(test => (
+                  <div
+                    key={test.index}
+                    className={`vg-variant-row${selectedRun === test.index ? ' is-selected' : ''}`}
+                    onClick={() => selectTest(test.index)}
+                  >
+                    <span className="vg-variant-dot" />
+                    <span>{test.displayName ?? test.name}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="vg-main">
+          <div className="vg-canvas">
+            <iframe ref={iframeRef} />
+          </div>
           {paramSchema.length > 0 && (
-            <div style={{
-              borderTop: '1px solid #e0e0e0',
-              background: '#fafafa',
-              padding: '12px 16px',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 20,
-              alignItems: 'flex-start',
-              maxHeight: 220,
-              overflowY: 'auto',
-            }}>
+            <div className="vg-controls">
               {paramSchema.map(s => (
                 <ParamControl key={s.key} entry={s} value={paramValues[s.key]} onUpdate={updateParam} />
               ))}
