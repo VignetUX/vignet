@@ -1,6 +1,8 @@
 {
-  "name": "@vignet/workshop",
-  "version": "0.0.1",
+  "name": "@jibelabs/vignet",
+  "description": "Frontend UX scenes workshop powered by vitests",
+  "version": "1.0.0-alpha",
+  "author": "Junjay Tan",
   "type": "module",
   "bin": {
     "vignet": "./cli.mjs"
@@ -10,6 +12,11 @@
     "build": "tsup",
     "dev": "tsup --watch"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jibelabs/vignet.git"
+  },
+  "homepage": "",
   "types": "./src/index.ts",
   "exports": {
     ".": {
