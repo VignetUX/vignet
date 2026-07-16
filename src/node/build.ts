@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { workshopPlugin, discoverWorkshopFiles, getHoistMocksPlugin } from '../plugin.js'
 import { buildMockPlugin } from './build-plugin.js'
 import { workshopBuildHtml, frameBuildHtml } from './templates.js'
+import { loadConsumerPluginsAndResolve, findConsumerConfigFile } from './consumer-config.js'
 
 const vignetDir = fileURLToPath(new URL('../', import.meta.url))
 
@@ -86,6 +87,12 @@ export async function buildWorkshop(root: string, outDir: string): Promise<void>
   const hoistPlugin = await getHoistMocksPlugin()
   const extraPlugins = hoistPlugin ? [hoistPlugin] : []
 
+  // Consumer plugins (e.g. vite-tsconfig-paths) and resolve config (aliases) are needed here
+  // because these test files import the consumer's own components. There's no live Vitest
+  // instance to ask (unlike the dev server), so probe for vitest.config.*/vite.config.* directly.
+  const configFile = findConsumerConfigFile(root)
+  const { plugins: consumerPlugins, resolve: consumerResolve } = await loadConsumerPluginsAndResolve(root, configFile)
+
   const manifest: Array<{ path: string; bundle: string; views: string[] }> = []
 
   for (const file of files) {
@@ -95,7 +102,8 @@ export async function buildWorkshop(root: string, outDir: string): Promise<void>
     await viteBuild({
       configFile: false,
       root,
-      plugins: [workshopPlugin({ buildMode: true }), ...extraPlugins, buildMockPlugin()],
+      ...(Object.keys(consumerResolve).length && { resolve: consumerResolve }),
+      plugins: [...consumerPlugins, workshopPlugin({ buildMode: true }), ...extraPlugins, buildMockPlugin()],
       build: {
         // esnext target is required: consumer dependencies may use top-level await
         // (e.g. react-router, @mui), which ES2020 esbuild doesn't support.

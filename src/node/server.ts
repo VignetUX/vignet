@@ -1,27 +1,11 @@
-import { createServer, loadConfigFromFile, type ViteDevServer } from 'vite'
+import { createServer, type ViteDevServer } from 'vite'
 import { fileURLToPath } from 'url'
 import { join, sep, isAbsolute, relative } from 'path'
 import { workshopPlugin, getMockerPlugins } from '../plugin.js'
 import { frameHtml, workshopHtml } from './templates.js'
+import { loadConsumerPluginsAndResolve } from './consumer-config.js'
 
 const vignetDir = fileURLToPath(new URL('../', import.meta.url))
-
-// Load the consumer's vite.config.ts and return only the parts that are safe to forward:
-// plugins (e.g. vite-tsconfig-paths, custom resolvers) and resolve config (aliases).
-// We deliberately do NOT forward server, base, appType, build, etc. — those settings
-// control how the consumer's app is served and would break vignet's own server if inherited.
-async function loadConsumerPluginsAndResolve(root: string): Promise<{ plugins: any[]; resolve: any }> {
-  try {
-    const result = await loadConfigFromFile({ command: 'serve', mode: 'development' }, undefined, root)
-    return {
-      // Flatten in case any plugin entry is itself an array (Vite allows nested plugin arrays)
-      plugins: (result?.config?.plugins ?? []).flat().filter(Boolean),
-      resolve: result?.config?.resolve ?? {},
-    }
-  } catch {
-    return { plugins: [], resolve: {} }
-  }
-}
 
 export async function startVignetServer(vitest: any): Promise<void> {
   const rawDir: string | undefined = vitest?.config?.dir
@@ -46,7 +30,13 @@ export async function startVignetServer(vitest: any): Promise<void> {
   const frameEntry = join(vignetDir, 'src/frame.ts')
 
   const mockerPlugins = await getMockerPlugins()
-  const { plugins: consumerPlugins, resolve: consumerResolve } = await loadConsumerPluginsAndResolve(process.cwd())
+  // Pass the exact config file vitest itself resolved (it already prefers vitest.config.*
+  // over vite.config.*), so vignet picks up aliases/plugins defined there even when the
+  // consumer has no vite.config.ts at all (common for Next.js apps).
+  const { plugins: consumerPlugins, resolve: consumerResolve } = await loadConsumerPluginsAndResolve(
+    process.cwd(),
+    vitest?.vite?.config?.configFile,
+  )
 
   const server = await createServer({
     configFile: false,
