@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { Button } from './Button.js'
-import { param } from '@vignet/workshop'
+import { param } from '@jibelabs/vignet'
 
 test('primary', { meta: { vignet: { name: 'Primary Button' } } }, () => {
   const label    = param('label',    'Click me', { label: 'Label' })
