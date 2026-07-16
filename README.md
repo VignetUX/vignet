@@ -1,6 +1,8 @@
 # Vignet
 
+Vignet (pronounced like "vignette") is a frontend scenes workshop generated directly from your vitest unit tests.
 
+This allows you to create frontend scenes of your web app states for full pages as well as design system components using the vitest features you're already familiar with.
 
 ## Building and running
 
