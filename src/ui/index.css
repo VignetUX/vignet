@@ -209,6 +209,7 @@ button {
 }
 
 .vg-canvas {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -221,6 +222,42 @@ button {
   flex: 1;
   border: none;
   background: transparent;
+}
+
+.vg-error-panel {
+  position: absolute;
+  inset: 24px;
+  overflow: auto;
+  background: #2b0d0d;
+  color: #ffd7d7;
+  border: 1px solid #7a2020;
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.vg-error-context {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #ff8080;
+  margin-bottom: 6px;
+}
+
+.vg-error-message {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: pre-wrap;
+  margin-bottom: 10px;
+}
+
+.vg-error-stack {
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: #ffb3b3;
+  margin: 0;
 }
 
 /* ---- control panel ---- */
