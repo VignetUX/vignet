@@ -2,6 +2,16 @@ import '@vitest/mocker/auto-register'
 import { collectTests, getHooks } from '@vitest/runner'
 import type { File as VitestFile } from '@vitest/runner'
 import type { ParamSchemaEntry } from './runtime'
+import * as vitestShim from 'vitest'
+
+// Installs the virtual vitest shim's exports (describe/it/test/expect/vi/hooks) onto
+// globalThis, matching how real Vitest's `globals: true` behaves. Setup files and spec
+// files that rely on implicit globals (no `import ... from 'vitest'`, e.g. Angular CLI's
+// generated specs, or jest-dom's `expect.extend()` inside a consumer's setup file) would
+// otherwise run before the shim is ever loaded, since it only installs on module import.
+for (const [key, value] of Object.entries(vitestShim)) {
+  ;(globalThis as any)[key] = value
+}
 
 declare global {
   interface Window {
@@ -102,6 +112,20 @@ function findSuitePath(tasks: VitestFile['tasks'], targetIndex: number): any[] {
 }
 
 ;(async () => {
+  // Run the consumer's real setupFiles before collection, mirroring what Vitest's own
+  // worker does. vitest.config.setupFiles is resolved server-side and served as /@fs/
+  // URLs; import()ing them here (rather than just listing them in runner.config) is
+  // required because @vitest/runner's collectTests never executes setupFiles itself.
+  try {
+    const { setupFiles } = await (await fetch('/__workshop_env__')).json()
+    for (const url of setupFiles as string[]) {
+      await import(/* @vite-ignore */ url)
+    }
+  } catch (error) {
+    reportError('Failed to run setup files', error)
+    return
+  }
+
   // collectTests imports the file (via runner.importFile), which populates both
   // __workshop_registry__ and @vitest/runner's suite context with hooks. Import-time
   // failures (syntax errors, throwing top-level code) are caught internally by
