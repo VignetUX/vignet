@@ -112,17 +112,19 @@ function findSuitePath(tasks: VitestFile['tasks'], targetIndex: number): any[] {
 }
 
 ;(async () => {
-  // Run the consumer's real setupFiles before collection, mirroring what Vitest's own
-  // worker does. vitest.config.setupFiles is resolved server-side and served as /@fs/
-  // URLs; import()ing them here (rather than just listing them in runner.config) is
-  // required because @vitest/runner's collectTests never executes setupFiles itself.
+  // vitest.config.setupFiles is resolved server-side and served as /@fs/ URLs. These must go
+  // into runner.config.setupFiles rather than being import()ed directly here: collectTests
+  // internally calls clearCollectorContext(file, runner) — which installs @vitest/runner's
+  // module-scoped `runner`/`defaultSuite` state — BEFORE it runs config.setupFiles. Setup code
+  // that itself calls beforeEach/afterEach at import time (e.g. Angular's TestBed testing
+  // module, registered via the Tier 2 adapter) needs that state to already exist; importing
+  // setup files ourselves ahead of collectTests would run them before the state is installed,
+  // producing "Vitest failed to find the runner".
   try {
     const { setupFiles } = await (await fetch('/__workshop_env__')).json()
-    for (const url of setupFiles as string[]) {
-      await import(/* @vite-ignore */ url)
-    }
+    runner.config.setupFiles = setupFiles as string[]
   } catch (error) {
-    reportError('Failed to run setup files', error)
+    reportError('Failed to load workshop env', error)
     return
   }
 
