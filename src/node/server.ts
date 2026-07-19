@@ -1,11 +1,22 @@
 import { createServer, type ViteDevServer } from 'vite'
 import { fileURLToPath } from 'url'
-import { join, sep, isAbsolute, relative } from 'path'
+import { join, sep, isAbsolute, relative, extname } from 'path'
+import { readdirSync, readFileSync } from 'node:fs'
 import { workshopPlugin, getMockerPlugins } from '../plugin.js'
 import { frameHtml, workshopHtml } from './templates.js'
 import { loadConsumerPluginsAndResolve } from './consumer-config.js'
 
 const vignetDir = fileURLToPath(new URL('../', import.meta.url))
+
+// Pre-built UI shell (see scripts/build-ui.ts) — served as static files below rather
+// than live-transformed via /@fs/, so consumers never need @vitejs/plugin-react/react/react-dom.
+const uiDevDir = join(vignetDir, 'dist/ui-dev')
+const UI_STATIC_MIME: Record<string, string> = {
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+}
 
 export async function startVignetServer(vitest: any): Promise<void> {
   const rawDir: string | undefined = vitest?.config?.dir
@@ -26,7 +37,6 @@ export async function startVignetServer(vitest: any): Promise<void> {
     }
   }
 
-  const mainEntry = join(vignetDir, 'src/ui/main.tsx')
   const frameEntry = join(vignetDir, 'src/frame.ts')
 
   const mockerPlugins = await getMockerPlugins()
@@ -48,20 +58,21 @@ export async function startVignetServer(vitest: any): Promise<void> {
     ...(Object.keys(consumerResolve).length && { resolve: consumerResolve }),
     server: {
       open: '/',
-      // vignetDir must be allowed so /@fs/ can serve main.tsx and frame.ts from vignet's src/
+      // vignetDir must be allowed so /@fs/ can serve frame.ts from vignet's src/
       fs: { allow: [process.cwd(), vignetDir] },
     },
-    // main.tsx and frame.ts are served via /@fs/ from outside the consumer's Vite root,
-    // so Vite's dep scanner never crawls them. Without entries, CJS packages they import
-    // (e.g. react-dom/client) are only discovered lazily on the first browser request —
-    // too late to pre-bundle before the browser loads, causing a fatal SyntaxError on
-    // the consumer's first run. entries tells Vite to scan these files upfront at startup.
+    // frame.ts is served via /@fs/ from outside the consumer's Vite root, so Vite's dep
+    // scanner never crawls it. Without entries, CJS packages it imports are only discovered
+    // lazily on the first browser request — too late to pre-bundle before the browser loads,
+    // causing a fatal SyntaxError on the consumer's first run. entries scans it upfront.
+    // The UI shell (main.tsx) is pre-built (see scripts/build-ui.ts) and served as a static
+    // file, so it needs no entry here.
     optimizeDeps: {
-      entries: [mainEntry, frameEntry],
+      entries: [frameEntry],
     },
     // consumerPlugins first so their resolveId/transform hooks run before vignet's shim.
     // This ensures vite-tsconfig-paths and similar plugins resolve imports correctly.
-    plugins: [...consumerPlugins, workshopPlugin({ include: consumerInclude }), ...mockerPlugins, vignetServerPlugin(mainEntry, frameEntry, vitest)],
+    plugins: [...consumerPlugins, workshopPlugin({ include: consumerInclude }), ...mockerPlugins, vignetServerPlugin(frameEntry)],
   })
 
   await server.listen()
@@ -78,11 +89,30 @@ export async function startVignetServer(vitest: any): Promise<void> {
  * This is the same pattern Vitest uses in its browser plugin
  * (`packages/browser/src/node/plugin.ts`).
  */
-function vignetServerPlugin(mainEntry: string, frameEntry: string, _vitest: unknown) {
+function vignetServerPlugin(frameEntry: string) {
   return {
     name: 'vignet:server',
     configureServer(server: ViteDevServer) {
       server.middlewares.use(async (req: any, res: any, next: () => void) => {
+        if (req.url?.startsWith('/__vignet_ui__/')) {
+          const fileName = decodeURIComponent(req.url.slice('/__vignet_ui__/'.length).split('?')[0])
+          const filePath = join(uiDevDir, fileName)
+          if (fileName.includes('..') || !filePath.startsWith(uiDevDir + sep)) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
+          try {
+            const content = readFileSync(filePath)
+            const type = UI_STATIC_MIME[extname(fileName)] ?? 'application/octet-stream'
+            res.writeHead(200, { 'Content-Type': type })
+            res.end(content)
+          } catch {
+            res.writeHead(404)
+            res.end()
+          }
+          return
+        }
         if (req.url?.startsWith('/frame')) {
           const html = await server.transformIndexHtml('/frame', frameHtml(frameEntry))
           res.writeHead(200, { 'Content-Type': 'text/html' })
@@ -90,7 +120,11 @@ function vignetServerPlugin(mainEntry: string, frameEntry: string, _vitest: unkn
           return
         }
         if (req.url !== '/') { next(); return }
-        const html = await server.transformIndexHtml('/', workshopHtml(mainEntry))
+        const uiCssFile = readdirSync(uiDevDir).find(f => f.endsWith('.css'))
+        const html = await server.transformIndexHtml(
+          '/',
+          workshopHtml('/__vignet_ui__/workshop.js', uiCssFile && `/__vignet_ui__/${uiCssFile}`),
+        )
         res.writeHead(200, { 'Content-Type': 'text/html' })
         res.end(html)
       })

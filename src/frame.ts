@@ -45,6 +45,21 @@ if (!file) {
   throw new Error('Workshop frame: missing ?file= param')
 }
 
+// Surfaces failures both in this iframe's own devtools console (easy to miss — devtools
+// defaults to the top frame's console context) and in the parent workshop UI, since a
+// blank canvas otherwise gives the developer no indication anything went wrong.
+function reportError(context: string, error: unknown) {
+  const err = error instanceof Error ? error : new Error(String(error))
+  console.error(`[vignet] ${context}:`, err)
+  window.parent.postMessage(
+    { type: 'workshop_error', context, message: err.message, stack: err.stack },
+    '*',
+  )
+}
+
+window.addEventListener('error', e => reportError('Uncaught error', e.error ?? e.message))
+window.addEventListener('unhandledrejection', e => reportError('Unhandled rejection', e.reason))
+
 // Minimal VitestRunner — just enough for collectTests to build the suite tree.
 // All reporting hooks are optional and left unset.
 const runner = {
@@ -88,8 +103,24 @@ function findSuitePath(tasks: VitestFile['tasks'], targetIndex: number): any[] {
 
 ;(async () => {
   // collectTests imports the file (via runner.importFile), which populates both
-  // __workshop_registry__ and @vitest/runner's suite context with hooks.
-  const [collectedFile] = await collectTests([file], runner as any)
+  // __workshop_registry__ and @vitest/runner's suite context with hooks. Import-time
+  // failures (syntax errors, throwing top-level code) are caught internally by
+  // collectTests and stored on file.result.errors rather than thrown — without checking
+  // this, a broken test file just produces an empty variant list with no explanation.
+  let collectedFile
+  try {
+    ;[collectedFile] = await collectTests([file], runner as any)
+  } catch (error) {
+    reportError(`Failed to collect tests from ${file}`, error)
+    return
+  }
+
+  if (collectedFile?.result?.errors?.length) {
+    for (const e of collectedFile.result.errors) {
+      reportError(`Failed to load ${file}`, new Error(e.message ?? String(e)))
+    }
+    return
+  }
 
   const all = window.__workshop_registry__.map((t, i) => ({ name: t.name, displayName: t.vignetviewName, index: i }))
   const hasViews = all.some(t => t.displayName !== undefined)
@@ -101,13 +132,18 @@ function findSuitePath(tasks: VitestFile['tasks'], targetIndex: number): any[] {
     const entry = window.__workshop_registry__[index]
 
     if (entry && (!hasViews || entry.vignetviewName !== undefined)) {
-      // Suites from outermost describe down to the test's immediate parent.
-      const suites = findSuitePath(collectedFile.tasks, index)
-      for (const s of suites) for (const h of getHooks(s).beforeAll) await (h as Function)()
-      for (const s of suites) for (const h of getHooks(s).beforeEach) await (h as Function)()
-      await entry.fn()
-      for (const s of [...suites].reverse()) for (const h of getHooks(s).afterEach) await (h as Function)()
-      for (const s of [...suites].reverse()) for (const h of getHooks(s).afterAll) await (h as Function)()
+      try {
+        // Suites from outermost describe down to the test's immediate parent.
+        const suites = findSuitePath(collectedFile.tasks, index)
+        for (const s of suites) for (const h of getHooks(s).beforeAll) await (h as Function)()
+        for (const s of suites) for (const h of getHooks(s).beforeEach) await (h as Function)()
+        await entry.fn()
+        for (const s of [...suites].reverse()) for (const h of getHooks(s).afterEach) await (h as Function)()
+        for (const s of [...suites].reverse()) for (const h of getHooks(s).afterAll) await (h as Function)()
+      } catch (error) {
+        reportError(`Failed to render "${entry.vignetviewName ?? entry.name}"`, error)
+        return
+      }
 
       // Send schema after full execution so both file-level and test-body param() calls are captured.
       window.parent.postMessage({ type: 'param_schema', schema: window.__workshop_param_schema__ }, '*')

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { WeatherWidget } from './WeatherWidget'
 import { getCurrentWeather } from '../services/weatherService'
-import { param } from '@jibelabs/vignet'
+import { param } from '@vignet/vignet'
 
 // This test file is a fixture for testing vignet workshop module mocking support.
 // vi.mock replaces the entire weatherService module so getCurrentWeather becomes

@@ -1,7 +1,6 @@
 import { build as viteBuild } from 'vite'
-import react from '@vitejs/plugin-react'
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs'
 import path, { resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { workshopPlugin, discoverWorkshopFiles, getHoistMocksPlugin } from '../plugin.js'
@@ -35,32 +34,12 @@ export async function buildWorkshop(root: string, outDir: string): Promise<void>
     console.warn('[vignet] No workshop files found (no files with vignet: marker match the include pattern).')
   }
 
-  // 1. Build the UI shell as an ES module library.
-  //    define: { __VIGNET_BUILD_MODE__: 'true' } inlines the build-mode flag so App.tsx
-  //    fetches manifest.json instead of /__workshop_files__.
-  const uiEntry = resolve(vignetDir, 'src/ui/main.tsx')
-  await viteBuild({
-    configFile: false,
-    root: vignetDir,
-    plugins: [react(), workshopPlugin({ buildMode: true })],
-    define: {
-      __VIGNET_BUILD_MODE__: 'true',
-      // Vite's library mode does not auto-replace process.env.NODE_ENV the way app mode does.
-      // React checks this at runtime to choose its dev vs production bundle; without this
-      // define the reference survives into the output and throws in browsers (no process global).
-      'process.env.NODE_ENV': '"production"',
-    },
-    build: {
-      outDir: absOutDir,
-      emptyOutDir: true,
-      lib: {
-        entry: uiEntry,
-        formats: ['es'],
-        fileName: () => 'ui.js',
-      },
-    },
-    server: { fs: { allow: [root, vignetDir] } },
-  })
+  // 1. Copy the pre-built UI shell (ui.js + CSS/assets). Built once during vignet's own
+  //    `npm run build` (see scripts/build-ui.ts) using vignet's own devDependencies
+  //    (@vitejs/plugin-react, react, react-dom) so these aren't requirements for consumers.
+  rmSync(absOutDir, { recursive: true, force: true })
+  mkdirSync(absOutDir, { recursive: true })
+  cpSync(resolve(vignetDir, 'dist/ui-build'), absOutDir, { recursive: true })
   writeFileSync(path.join(absOutDir, 'index.html'), workshopBuildHtml('./ui.js'))
 
   // 2. Build the static frame runtime (frame-static.ts → frame.js).

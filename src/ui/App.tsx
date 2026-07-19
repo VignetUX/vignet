@@ -152,6 +152,7 @@ export function App() {
   const [paramSchema, setParamSchema] = useState<ParamSchemaEntry[]>([])
   const [paramValues, setParamValues] = useState<Record<string, unknown>>({})
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [frameError, setFrameError] = useState<{ context: string; message: string; stack?: string } | null>(null)
 
   useEffect(() => {
     if (isBuildMode) {
@@ -173,7 +174,10 @@ export function App() {
   useEffect(() => {
     function handler(e: MessageEvent) {
       if (e.data?.type === 'tests_collected') {
+        setFrameError(null)
         setTests(e.data.tests)
+      } else if (e.data?.type === 'workshop_error') {
+        setFrameError({ context: e.data.context, message: e.data.message, stack: e.data.stack })
       } else if (e.data?.type === 'param_schema') {
         const schema: ParamSchemaEntry[] = e.data.schema ?? []
         setParamSchema(schema)
@@ -207,6 +211,7 @@ export function App() {
     setSelectedRun(0)
     setParamSchema([])
     setParamValues({})
+    setFrameError(null)
     if (iframeRef.current) {
       iframeRef.current.src = frameUrl(file, 0, {})
     }
@@ -216,6 +221,7 @@ export function App() {
     setSelectedRun(index)
     setParamSchema([])
     setParamValues({})
+    setFrameError(null)
     if (iframeRef.current && selectedFile) {
       iframeRef.current.src = frameUrl(selectedFile, index, {})
     }
@@ -293,6 +299,13 @@ export function App() {
           )}
           <div className="vg-canvas">
             <iframe ref={iframeRef} />
+            {frameError && (
+              <div className="vg-error-panel">
+                <div className="vg-error-context">{frameError.context}</div>
+                <div className="vg-error-message">{frameError.message}</div>
+                {frameError.stack && <pre className="vg-error-stack">{frameError.stack}</pre>}
+              </div>
+            )}
           </div>
           {paramSchema.length > 0 && (
             <div className="vg-controls">

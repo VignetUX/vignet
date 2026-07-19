@@ -54,13 +54,17 @@ export function frameHtml(frameEntry: string): string {
 </html>`
 }
 
-export function workshopHtml(mainEntry: string): string {
+// uiJsPath/uiCssPath point at the pre-built UI shell (see scripts/build-ui.ts), served
+// as static files by vignet:server's /__vignet_ui__/ middleware — not live-transformed,
+// so no @vitejs/plugin-react/react/react-dom is required in the consumer's project.
+export function workshopHtml(uiJsPath: string, uiCssPath?: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/png" href="${FAVICON_DATA_URI}" />
+    ${uiCssPath ? `<link rel="stylesheet" href="${uiCssPath}" />` : ''}
     <title>Vignet Workshop</title>
   </head>
   <body>
@@ -70,7 +74,7 @@ export function workshopHtml(mainEntry: string): string {
       // The mocker is only active in the test iframe, so provide a passthrough here.
       if (!window["__vitest_mocker__"]) window["__vitest_mocker__"] = { wrapDynamicImport: fn => fn() };
     </script>
-    <script type="module" src="/@fs${mainEntry}"></script>
+    <script type="module" src="${uiJsPath}"></script>
   </body>
 </html>`
 }

@@ -6,11 +6,19 @@ This allows you to create frontend scenes of your web app states for full pages 
 
 ## Building and running
 
-For active CLI development, run pnpm dev (tsup --watch) in root — it rebuilds dist/cli.js automatically on every save. Then each pnpm vignet in example/frontend picks up the latest build instantly.
+`pnpm build` in root runs two steps: `scripts/build-ui.ts` prebuilds vignet's own workshop UI shell (`src/ui/`) into static JS/CSS bundles under `dist/ui-dev` and `dist/ui-build`, then `tsup` bundles the CLI. The prebuild step is what lets vignet ship without requiring consumers to install `@vitejs/plugin-react`, `react`, or `react-dom` — see "Dependencies" below.
+
+For active CLI development, run `pnpm dev` (`tsup --watch`) in root — it rebuilds `dist/cli.js` automatically on every save. This does not re-run the UI prebuild step; re-run `pnpm build` (or `tsx scripts/build-ui.ts`) if you change files under `src/ui/`. Then each `pnpm vignet` in `example/frontend` picks up the latest build instantly.
 
 To get a clean build via tsup, you pass --clean on the CLI or clean: true in the config.
 
 To start the vignet workspace run: `pnpm --filter workshop-example vignet`.
+
+## Dependencies
+
+Vignet's only required peer dependencies are `vite` and `vitest` — both already present in any project vignet is useful for, since vignet's whole premise is turning your existing Vitest test files into workshop stories.
+
+`@vitejs/plugin-react`, `react`, and `react-dom` are **not** required by consumers. Vignet's own workshop UI (the sidebar/iframe host) happens to be written in React, but it's prebuilt into a static bundle at vignet's own release time (see `scripts/build-ui.ts`) and served as-is — it never needs to be transformed in a consumer's project. Whether your own components/tests use React, Vue, or nothing at all is unaffected either way: your own test files still go through whatever plugins your own `vite.config.ts`/`vitest.config.ts` already declares.
 
 ## Marking workshop views
 
