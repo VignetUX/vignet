@@ -5,6 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { workshopPlugin, getMockerPlugins } from '../plugin.js'
 import { frameHtml, workshopHtml } from './templates.js'
 import { loadConsumerPluginsAndResolve } from './consumer-config.js'
+import { resolveFrameworkAdapterEnv } from './adapters/index.js'
 
 const vignetDir = fileURLToPath(new URL('../', import.meta.url))
 
@@ -29,6 +30,12 @@ export async function startVignetServer(vitest: any): Promise<void> {
   const setupFileUrls = (Array.isArray(rawSetupFiles) ? rawSetupFiles : rawSetupFiles ? [rawSetupFiles] : []).map(
     f => `/@fs${f}`,
   )
+
+  // Tier 2: frameworks whose test bootstrapping can't be expressed as "a list of files to
+  // import" (Angular's TestBed.initTestEnvironment()) contribute extra setup files on top of
+  // the generic Tier 1 list above. Resolved once at server startup, same as everything else here.
+  const adapterEnv = await resolveFrameworkAdapterEnv(process.cwd())
+  const allSetupFileUrls = [...setupFileUrls, ...adapterEnv.setupFiles]
 
   // vitest.config.include patterns are relative to vitest.config.dir, not the project root.
   // Prepend dir so the glob in workshopPlugin resolves correctly from process.cwd().
@@ -84,7 +91,7 @@ export async function startVignetServer(vitest: any): Promise<void> {
       ...consumerPlugins,
       workshopPlugin({ include: consumerInclude }),
       ...mockerPlugins,
-      vignetServerPlugin(frameEntry, setupFileUrls),
+      vignetServerPlugin(frameEntry, allSetupFileUrls),
     ],
   })
 
