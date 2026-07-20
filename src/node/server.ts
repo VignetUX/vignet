@@ -5,6 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { workshopPlugin, getMockerPlugins } from '../plugin.js'
 import { frameHtml, workshopHtml } from './templates.js'
 import { loadConsumerPluginsAndResolve } from './consumer-config.js'
+import { resolveFrameworkAdapterEnv } from './adapters/index.js'
 
 const vignetDir = fileURLToPath(new URL('../', import.meta.url))
 
@@ -21,6 +22,20 @@ const UI_STATIC_MIME: Record<string, string> = {
 export async function startVignetServer(vitest: any): Promise<void> {
   const rawDir: string | undefined = vitest?.config?.dir
   const rawInclude: string | string[] | undefined = vitest?.config?.include
+  const rawSetupFiles: string | string[] | undefined = vitest?.config?.setupFiles
+
+  // vitest.config.setupFiles is already the fully-resolved absolute-path list vitest
+  // itself would import before running tests. Convert to the /@fs/ convention frameHtml
+  // already uses so frame.ts can import() them the same way it imports the test file.
+  const setupFileUrls = (Array.isArray(rawSetupFiles) ? rawSetupFiles : rawSetupFiles ? [rawSetupFiles] : []).map(
+    f => `/@fs${f}`,
+  )
+
+  // Tier 2: frameworks whose test bootstrapping can't be expressed as "a list of files to
+  // import" (Angular's TestBed.initTestEnvironment()) contribute extra setup files on top of
+  // the generic Tier 1 list above. Resolved once at server startup, same as everything else here.
+  const adapterEnv = await resolveFrameworkAdapterEnv(process.cwd())
+  const allSetupFileUrls = [...setupFileUrls, ...adapterEnv.setupFiles]
 
   // vitest.config.include patterns are relative to vitest.config.dir, not the project root.
   // Prepend dir so the glob in workshopPlugin resolves correctly from process.cwd().
@@ -72,7 +87,13 @@ export async function startVignetServer(vitest: any): Promise<void> {
     },
     // consumerPlugins first so their resolveId/transform hooks run before vignet's shim.
     // This ensures vite-tsconfig-paths and similar plugins resolve imports correctly.
-    plugins: [...consumerPlugins, workshopPlugin({ include: consumerInclude }), ...mockerPlugins, vignetServerPlugin(frameEntry)],
+    plugins: [
+      ...consumerPlugins,
+      ...adapterEnv.plugins,
+      workshopPlugin({ include: consumerInclude }),
+      ...mockerPlugins,
+      vignetServerPlugin(frameEntry, allSetupFileUrls),
+    ],
   })
 
   await server.listen()
@@ -89,11 +110,16 @@ export async function startVignetServer(vitest: any): Promise<void> {
  * This is the same pattern Vitest uses in its browser plugin
  * (`packages/browser/src/node/plugin.ts`).
  */
-function vignetServerPlugin(frameEntry: string) {
+function vignetServerPlugin(frameEntry: string, setupFileUrls: string[]) {
   return {
     name: 'vignet:server',
     configureServer(server: ViteDevServer) {
       server.middlewares.use(async (req: any, res: any, next: () => void) => {
+        if (req.url === '/__workshop_env__') {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ setupFiles: setupFileUrls }))
+          return
+        }
         if (req.url?.startsWith('/__vignet_ui__/')) {
           const fileName = decodeURIComponent(req.url.slice('/__vignet_ui__/'.length).split('?')[0])
           const filePath = join(uiDevDir, fileName)

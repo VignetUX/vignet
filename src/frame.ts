@@ -2,6 +2,16 @@ import '@vitest/mocker/auto-register'
 import { collectTests, getHooks } from '@vitest/runner'
 import type { File as VitestFile } from '@vitest/runner'
 import type { ParamSchemaEntry } from './runtime'
+import * as vitestShim from 'vitest'
+
+// Installs the virtual vitest shim's exports (describe/it/test/expect/vi/hooks) onto
+// globalThis, matching how real Vitest's `globals: true` behaves. Setup files and spec
+// files that rely on implicit globals (no `import ... from 'vitest'`, e.g. Angular CLI's
+// generated specs, or jest-dom's `expect.extend()` inside a consumer's setup file) would
+// otherwise run before the shim is ever loaded, since it only installs on module import.
+for (const [key, value] of Object.entries(vitestShim)) {
+  ;(globalThis as any)[key] = value
+}
 
 declare global {
   interface Window {
@@ -102,6 +112,22 @@ function findSuitePath(tasks: VitestFile['tasks'], targetIndex: number): any[] {
 }
 
 ;(async () => {
+  // vitest.config.setupFiles is resolved server-side and served as /@fs/ URLs. These must go
+  // into runner.config.setupFiles rather than being import()ed directly here: collectTests
+  // internally calls clearCollectorContext(file, runner) — which installs @vitest/runner's
+  // module-scoped `runner`/`defaultSuite` state — BEFORE it runs config.setupFiles. Setup code
+  // that itself calls beforeEach/afterEach at import time (e.g. Angular's TestBed testing
+  // module, registered via the Tier 2 adapter) needs that state to already exist; importing
+  // setup files ourselves ahead of collectTests would run them before the state is installed,
+  // producing "Vitest failed to find the runner".
+  try {
+    const { setupFiles } = await (await fetch('/__workshop_env__')).json()
+    runner.config.setupFiles = setupFiles as string[]
+  } catch (error) {
+    reportError('Failed to load workshop env', error)
+    return
+  }
+
   // collectTests imports the file (via runner.importFile), which populates both
   // __workshop_registry__ and @vitest/runner's suite context with hooks. Import-time
   // failures (syntax errors, throwing top-level code) are caught internally by
