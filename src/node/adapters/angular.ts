@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { angularJitResourcePlugin } from './angular-jit-resources.js'
 import type { FrameworkAdapter } from './types.js'
 
 // Cheap, reliable Angular signal: an angular.json with a project wired to the Vitest-based
@@ -70,4 +71,9 @@ async function resolve(cwd: string): Promise<{ setupFiles: string[] }> {
   return { setupFiles: ['/' + path.relative(cwd, filePath).replaceAll(path.sep, '/')] }
 }
 
-export const angularAdapter: FrameworkAdapter = { name: 'angular', detect, resolve }
+export const angularAdapter: FrameworkAdapter = {
+  name: 'angular',
+  detect,
+  resolve,
+  vitePlugin: (cwd: string) => angularJitResourcePlugin(cwd),
+}

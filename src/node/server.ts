@@ -89,6 +89,7 @@ export async function startVignetServer(vitest: any): Promise<void> {
     // This ensures vite-tsconfig-paths and similar plugins resolve imports correctly.
     plugins: [
       ...consumerPlugins,
+      ...adapterEnv.plugins,
       workshopPlugin({ include: consumerInclude }),
       ...mockerPlugins,
       vignetServerPlugin(frameEntry, allSetupFileUrls),
