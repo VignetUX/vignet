@@ -1,3 +1,5 @@
+import type { Plugin } from 'vite'
+
 // A FrameworkAdapter contributes extra setup files for a consumer whose test-environment
 // bootstrapping can't be expressed as "here's a list of files to import" (Tier 1's generic
 // fix). Angular's TestBed.initTestEnvironment() is the motivating case: Angular CLI normally
@@ -8,4 +10,7 @@ export interface FrameworkAdapter {
   name: string
   detect(cwd: string): Promise<boolean>
   resolve(cwd: string): Promise<{ setupFiles: string[] }>
+  // For contributions that aren't expressible as setupFiles — e.g. Angular's templateUrl/
+  // styleUrl JIT resolution, which needs a source transform rather than a file to import.
+  vitePlugin?(cwd: string): Plugin
 }
