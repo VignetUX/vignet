@@ -1,6 +1,6 @@
 import { build as viteBuild } from 'vite'
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, existsSync } from 'node:fs'
 import path, { resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { workshopPlugin, discoverWorkshopFiles, getHoistMocksPlugin } from '../plugin.js'
@@ -37,9 +37,16 @@ export async function buildWorkshop(root: string, outDir: string): Promise<void>
   // 1. Copy the pre-built UI shell (ui.js + CSS/assets). Built once during vignet's own
   //    `npm run build` (see scripts/build-ui.ts) using vignet's own devDependencies
   //    (@vitejs/plugin-react, react, react-dom) so these aren't requirements for consumers.
+  const uiBuildDir = resolve(vignetDir, 'dist/ui-build')
+  if (!existsSync(uiBuildDir)) {
+    throw new Error(
+      `[vignet] Missing prebuilt UI shell at ${uiBuildDir}. Run "pnpm build" (or "tsx scripts/build-ui.ts") ` +
+      'in the vignet package before running "vignet build".',
+    )
+  }
   rmSync(absOutDir, { recursive: true, force: true })
   mkdirSync(absOutDir, { recursive: true })
-  cpSync(resolve(vignetDir, 'dist/ui-build'), absOutDir, { recursive: true })
+  cpSync(uiBuildDir, absOutDir, { recursive: true })
   writeFileSync(path.join(absOutDir, 'index.html'), workshopBuildHtml('./ui.js'))
 
   // 2. Build the static frame runtime (frame-static.ts → frame.js).
