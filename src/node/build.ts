@@ -47,7 +47,7 @@ export async function buildWorkshop(root: string, outDir: string): Promise<void>
   rmSync(absOutDir, { recursive: true, force: true })
   mkdirSync(absOutDir, { recursive: true })
   cpSync(uiBuildDir, absOutDir, { recursive: true })
-  writeFileSync(path.join(absOutDir, 'index.html'), workshopBuildHtml('./ui.js'))
+  writeFileSync(path.join(absOutDir, 'index.html'), workshopBuildHtml('./ui.js', './vignet.css'))
 
   // 2. Build the static frame runtime (frame-static.ts → frame.js).
   const frameStaticEntry = resolve(vignetDir, 'src/frame-static.ts')
