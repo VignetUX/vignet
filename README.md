@@ -57,4 +57,4 @@ Components that use `useParams()` or other React Router hooks need a router cont
 In `example/frontend`:
 
 - Build static output: `pnpm vignet:build`
-- Then serve it: `npx serve workshop-dist`
+- Then serve it: `npx serve vignet-dist`
