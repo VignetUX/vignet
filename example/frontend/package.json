@@ -5,7 +5,9 @@
     "scripts": {
         "dev": "vite",
         "build": "tsc -b && vite build",
-        "test": "vitest"
+        "test": "vitest",
+        "vignet": "vignet",
+        "vignet:build": "vignet build"
     },
     "dependencies": {
         "@emotion/react": "^11.14.0",
