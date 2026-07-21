@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import * as Switch from '@radix-ui/react-switch'
 import type { ParamSchemaEntry } from '../runtime'
 import vignetIcon from './assets/vignet-icon.png'
@@ -143,7 +143,8 @@ function ParamControl({ entry, value, onUpdate }: {
 }
 
 export function App() {
-  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [frameSrc, setFrameSrc] = useState('')
+  const [frameKey, setFrameKey] = useState(0)
   const [files, setFiles] = useState<string[]>([])
   const [bundleMap, setBundleMap] = useState<Record<string, string>>({})
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
@@ -205,6 +206,17 @@ export function App() {
     return `/frame?file=${encodeURIComponent(file)}&run=${run}${paramStr ? '&' + paramStr : ''}`
   }
 
+  // In build mode every URL is `./frame.html#...` — same path, only the hash fragment
+  // changes between selections. Browsers treat an iframe.src reassignment that differs
+  // only by fragment as an in-page hash change, not a navigation, so frame-static.ts's
+  // top-level script (which reads location.hash once on load) never re-runs. Bumping
+  // frameKey forces React to unmount/remount the iframe element, which always produces
+  // a real navigation regardless of whether the URL's path or only its hash changed.
+  function navigateFrame(url: string) {
+    setFrameSrc(url)
+    setFrameKey(k => k + 1)
+  }
+
   function selectFile(file: string) {
     setSelectedFile(file)
     setTests([])
@@ -212,9 +224,7 @@ export function App() {
     setParamSchema([])
     setParamValues({})
     setFrameError(null)
-    if (iframeRef.current) {
-      iframeRef.current.src = frameUrl(file, 0, {})
-    }
+    navigateFrame(frameUrl(file, 0, {}))
   }
 
   function selectTest(index: number) {
@@ -222,8 +232,8 @@ export function App() {
     setParamSchema([])
     setParamValues({})
     setFrameError(null)
-    if (iframeRef.current && selectedFile) {
-      iframeRef.current.src = frameUrl(selectedFile, index, {})
+    if (selectedFile) {
+      navigateFrame(frameUrl(selectedFile, index, {}))
     }
   }
 
@@ -233,8 +243,8 @@ export function App() {
   function updateParam(key: string, value: unknown, navigate: boolean) {
     const newValues = { ...paramValues, [key]: value }
     setParamValues(newValues)
-    if (navigate && iframeRef.current && selectedFile !== null && selectedRun !== null) {
-      iframeRef.current.src = frameUrl(selectedFile, selectedRun, newValues)
+    if (navigate && selectedFile !== null && selectedRun !== null) {
+      navigateFrame(frameUrl(selectedFile, selectedRun, newValues))
     }
   }
 
@@ -298,7 +308,7 @@ export function App() {
             </button>
           )}
           <div className="vg-canvas">
-            <iframe ref={iframeRef} />
+            <iframe key={frameKey} src={frameSrc} />
             {frameError && (
               <div className="vg-error-panel">
                 <div className="vg-error-context">{frameError.context}</div>
