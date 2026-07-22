@@ -46,7 +46,13 @@ const VIRTUAL_VITEST_STATIC_SRC = `
 import { fn, spyOn, restoreAllMocks, clearAllMocks, resetAllMocks, isMockFunction } from '@vitest/spy'
 
 const noop = () => {}
-const noopMatcher = new Proxy(noop, { get: () => noopMatcher, apply: () => noopMatcher })
+// 'then' must return undefined, not noopMatcher: otherwise any assertion result looks like a
+// thenable to consumers that duck-type promises (e.g. testing-library's waitFor checks
+// typeof result?.then === 'function'), which then await a .then() that never resolves.
+const noopMatcher = new Proxy(noop, {
+  get: (_, prop) => prop === 'then' ? undefined : noopMatcher,
+  apply: () => noopMatcher,
+})
 
 const hookStack = [{ beforeAll: [], beforeEach: [], afterEach: [], afterAll: [] }]
 
@@ -76,13 +82,40 @@ export function test(name, optionsOrFn, fn) {
 }
 export const it = test
 
-export const expect = new Proxy(noop, {
-  apply: () => noopMatcher,
-  get(_, prop) {
-    if (prop === 'extend' || prop === 'soft' || prop === 'poll') return noop
-    return () => noopMatcher
-  },
-})
+function elementIsInDocument(el) {
+  return !!el && !!el.ownerDocument && el.ownerDocument.contains(el)
+}
+
+// toBeInTheDocument (and its .not form) get real semantics, unlike every other matcher: it's
+// the one check consumers rely on inside waitFor() to poll for a spinner appearing/disappearing
+// (e.g. 'await waitFor(() => expect(screen.queryByRole(\\'progressbar\\')).not.toBeInTheDocument())').
+// A matcher that never throws makes waitFor's callback "succeed" on its very first synchronous
+// check, before the awaited state change has happened, racing ahead of the real DOM update.
+function makeMatcher(received, negated) {
+  return new Proxy(noop, {
+    get(_, prop) {
+      if (prop === 'then') return undefined
+      if (prop === 'not') return makeMatcher(received, !negated)
+      if (prop === 'toBeInTheDocument') {
+        return () => {
+          const pass = negated ? !elementIsInDocument(received) : elementIsInDocument(received)
+          if (!pass) throw new Error('expect(...)' + (negated ? '.not' : '') + '.toBeInTheDocument() failed')
+          return noopMatcher
+        }
+      }
+      if (prop === 'extend' || prop === 'soft' || prop === 'poll') return noop
+      return () => noopMatcher
+    },
+    apply: () => noopMatcher,
+  })
+}
+
+export function expect(received) {
+  return makeMatcher(received, false)
+}
+expect.extend = noop
+expect.soft = noop
+expect.poll = noop
 
 export const vi = {
   fn,
@@ -113,7 +146,8 @@ globalThis.vi = vi
 // Served when any file does `import ... from 'vitest'` in the workshop Vite dev server.
 // - test/it: push to __workshop_registry__ AND into @vitest/runner's suite context (for hooks)
 // - describe/beforeEach/afterEach/beforeAll/afterAll: real @vitest/runner exports
-// - expect: no-op proxy (assertions must not throw so components can render)
+// - expect: no-op proxy (assertions must not throw so components can render), except
+//   toBeInTheDocument()/.not.toBeInTheDocument() which have real semantics so waitFor() works
 // - vi: real @vitest/spy so spyOn/fn/restoreAllMocks etc. work
 const VIRTUAL_VITEST_SRC = `
 import { fn, spyOn, restoreAllMocks, clearAllMocks, resetAllMocks, isMockFunction } from '@vitest/spy'
@@ -121,7 +155,13 @@ import { test as _test, it as _it, describe, beforeEach, afterEach, beforeAll, a
 export { describe, beforeEach, afterEach, beforeAll, afterAll }
 
 const noop = () => {}
-const noopMatcher = new Proxy(noop, { get: () => noopMatcher, apply: () => noopMatcher })
+// 'then' must return undefined, not noopMatcher: otherwise any assertion result looks like a
+// thenable to consumers that duck-type promises (e.g. testing-library's waitFor checks
+// typeof result?.then === 'function'), which then await a .then() that never resolves.
+const noopMatcher = new Proxy(noop, {
+  get: (_, prop) => prop === 'then' ? undefined : noopMatcher,
+  apply: () => noopMatcher,
+})
 
 export function test(name, optionsOrFn, fn) {
   const opts   = typeof optionsOrFn === 'object' && optionsOrFn !== null ? optionsOrFn : {}
@@ -133,13 +173,40 @@ export function test(name, optionsOrFn, fn) {
 }
 export const it = test
 
-export const expect = new Proxy(noop, {
-  apply: () => noopMatcher,
-  get(_, prop) {
-    if (prop === 'extend' || prop === 'soft' || prop === 'poll') return noop
-    return () => noopMatcher
-  },
-})
+function elementIsInDocument(el) {
+  return !!el && !!el.ownerDocument && el.ownerDocument.contains(el)
+}
+
+// toBeInTheDocument (and its .not form) get real semantics, unlike every other matcher: it's
+// the one check consumers rely on inside waitFor() to poll for a spinner appearing/disappearing
+// (e.g. 'await waitFor(() => expect(screen.queryByRole(\\'progressbar\\')).not.toBeInTheDocument())').
+// A matcher that never throws makes waitFor's callback "succeed" on its very first synchronous
+// check, before the awaited state change has happened, racing ahead of the real DOM update.
+function makeMatcher(received, negated) {
+  return new Proxy(noop, {
+    get(_, prop) {
+      if (prop === 'then') return undefined
+      if (prop === 'not') return makeMatcher(received, !negated)
+      if (prop === 'toBeInTheDocument') {
+        return () => {
+          const pass = negated ? !elementIsInDocument(received) : elementIsInDocument(received)
+          if (!pass) throw new Error('expect(...)' + (negated ? '.not' : '') + '.toBeInTheDocument() failed')
+          return noopMatcher
+        }
+      }
+      if (prop === 'extend' || prop === 'soft' || prop === 'poll') return noop
+      return () => noopMatcher
+    },
+    apply: () => noopMatcher,
+  })
+}
+
+export function expect(received) {
+  return makeMatcher(received, false)
+}
+expect.extend = noop
+expect.soft = noop
+expect.poll = noop
 
 export const vi = {
   fn,
