@@ -1,7 +1,7 @@
 {
   "name": "@vignet/vignet",
   "description": "Frontend UX scenes workshop powered by vitests",
-  "version": "1.0.0-alpha",
+  "version": "1.0.1-alpha",
   "author": "Junjay Tan",
   "type": "module",
   "bin": {
@@ -20,7 +20,8 @@
     "type": "git",
     "url": "https://github.com/jibelabs/vignet.git"
   },
-  "homepage": "",
+  "homepage": "https://www.vignet.dev",
+  "license": "MIT",
   "types": "./src/index.ts",
   "exports": {
     ".": {
