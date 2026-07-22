@@ -8,7 +8,7 @@ const cli = cac('vignet')
 
 cli
   .command('build', 'Build a static deployable workshop')
-  .option('--out <dir>', 'Output directory', { default: 'workshop-dist' })
+  .option('--out <dir>', 'Output directory', { default: 'vignet-dist' })
   .action(async (options: { out: string }) => {
     await buildWorkshop(process.cwd(), options.out)
   })

@@ -10,7 +10,7 @@ lerna-debug.log*
 **/.DS_Store
 
 # Built workshop outputs
-**/workshop-dist/
+**/vignet-dist/
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
@@ -152,4 +152,4 @@ vite.config.ts.timestamp-*
 # Test artifacts
 test/fixtures/*/node_modules/
 test/fixtures/*/package-lock.json
-test/fixtures/*/workshop-dist/
+test/fixtures/*/vignet-dist/

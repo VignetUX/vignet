@@ -200,4 +200,4 @@ cd example/frontend && npm test
 
 Inferred from `.gitignore` entries:
 
-- `test/fixtures/` — fixture projects for integration tests; each has its own `node_modules/`, `vignet-dist/`, and `workshop-dist/` (all gitignored)
+- `test/fixtures/` — fixture projects for integration tests; each has its own `node_modules/` and `vignet-dist/` (all gitignored)
