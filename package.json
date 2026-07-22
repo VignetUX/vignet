@@ -1,7 +1,7 @@
 {
   "name": "@vignet/vignet",
   "description": "Frontend UX scenes workshop powered by vitests",
-  "version": "1.0.1-alpha",
+  "version": "1.0.2-alpha",
   "author": "Junjay Tan",
   "type": "module",
   "bin": {
